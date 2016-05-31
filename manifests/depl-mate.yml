@@ -1,0 +1,15 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: mate
+  namespace: teapot
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mate
+    spec:
+      containers:
+      - name: mate
+        image: pierone.stups.zalan.do/teapot/mate:v0.0.1-SNAPSHOT
