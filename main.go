@@ -82,6 +82,7 @@ func main() {
 		}
 
 		if len(svc.Status.LoadBalancer.Ingress) > 1 {
+			// Print a warning about the ignored service, no need to crash here
 			logger.Printf("Cannot register service '%s/%s'. More than one ingress is not supported",
 				svc.Namespace, svc.Name)
 		}
@@ -180,6 +181,7 @@ func main() {
 		if event.Type == watch.Added || event.Type == watch.Modified {
 			svc, ok := event.Object.(*api.Service)
 			if !ok {
+				// If the object wasn't a Service we can safely ignore it
 				logger.Printf("Cannot cast object to service: %v", svc)
 				continue
 			}
@@ -187,6 +189,7 @@ func main() {
 			logger.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
 
 			if len(svc.Status.LoadBalancer.Ingress) > 1 {
+				// Print a warning about the ignored service, no need to crash here
 				logger.Printf("Cannot register service '%s/%s'. More than one ingress is not supported",
 					svc.Namespace, svc.Name)
 				continue
@@ -231,6 +234,7 @@ func main() {
 		if event.Type == watch.Deleted {
 			svc := event.Object.(*api.Service)
 			if !ok {
+				// If the object wasn't a Service we can safely ignore it
 				logger.Printf("Cannot cast object to service: %v", svc)
 				continue
 			}
@@ -238,6 +242,7 @@ func main() {
 			logger.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
 
 			if len(svc.Status.LoadBalancer.Ingress) > 1 {
+				// Print a warning about the ignored service, no need to crash here
 				logger.Printf("Cannot deregister service '%s/%s'. More than one ingress is not supported",
 					svc.Namespace, svc.Name)
 				continue
