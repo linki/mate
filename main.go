@@ -174,8 +174,8 @@ func main() {
 	for {
 		event, ok := <-events
 		if !ok {
-			logger.Println("Unable to read from channel. Channel was closed.")
-			break
+			// If the channel was closed something unexpected happened, let's fail.
+			logger.Fatalf("Unable to read from channel. Channel was closed.")
 		}
 
 		if event.Type == watch.Added || event.Type == watch.Modified {
