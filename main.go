@@ -1,93 +1,146 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
+	"log"
 	"os"
 	"strings"
+	"text/template"
 	"time"
-
-	"github.com/davecgh/go-spew/spew"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
-
 	dns "google.golang.org/api/dns/v1"
 
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client/restclient"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/watch"
 )
 
-func main() {
-	fmt.Println("Starting...")
+type Endpoint struct {
+	Domain    string
+	Namespace string
+	Name      string
+}
 
-	client, err := client.NewInCluster()
-	// or
-	// config := &restclient.Config{
-	// 	 Host: "http://127.0.0.1:8080",
-	// }
-	// client, err := client.New(config)
-	if err != nil {
-		fmt.Printf("Unable to connect to API server: %v", err)
+const (
+	defaultDomain = "oolong.gcp.zalan.do"
+	defaultMaster = "http://127.0.0.1:8080"
+	defaultFormat = "{{.Namespace}}-{{.Name}}.{{.Domain}}."
+)
+
+var (
+	master  = kingpin.Flag("master", "The address of the Kubernetes API server.").Default(defaultMaster).String()
+	domain  = kingpin.Flag("domain", "The DNS domain by which cluster endpoints are reachable.").Default(defaultDomain).String()
+	project = kingpin.Flag("project", "Project ID that manages the zone").Required().String()
+	zone    = kingpin.Flag("zone", "Name of the zone to manage.").String()
+	format  = kingpin.Flag("format", "Format of DNS entries").Default(defaultFormat).String()
+)
+
+func main() {
+	kingpin.Version("0.0.2")
+	kingpin.Parse()
+
+	logger := log.New(os.Stdout, "", log.LstdFlags)
+
+	if *zone == "" {
+		*zone = strings.Replace(*domain, ".", "-", -1)
+		logger.Printf("No --zone provided, inferring from domain: '%s'.", *zone)
 	}
-	services, err := client.Services(api.NamespaceAll).List(api.ListOptions{
+
+	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
+		"trimPrefix": strings.TrimPrefix,
+	}).Parse(*format)
+	if err != nil {
+		logger.Fatalf("Error parsing template: %s", err)
+	}
+
+	config := &restclient.Config{
+		Host: *master,
+	}
+	client, err := client.New(config)
+	if err != nil {
+		logger.Fatalf("Unable to connect to API server: %v", err)
+	}
+
+	allServices, err := client.Services(api.NamespaceAll).List(api.ListOptions{
 	// better to filter by services that have external IPs here
 	// FieldSelector: fields.OneTermEqualSelector("external ip", "exists"),
 	})
 	if err != nil {
-		fmt.Printf("Unable to retrieve list of services: %v", err)
+		logger.Fatalf("Unable to retrieve list of services: %v", err)
 	}
 
-	extServices := make([]api.Service, 0, len(services.Items))
+	services := make([]api.Service, 0, len(allServices.Items))
 
-	for _, svc := range services.Items {
+	for _, svc := range allServices.Items {
 		if len(svc.Status.LoadBalancer.Ingress) == 1 {
-			extServices = append(extServices, svc)
+			services = append(services, svc)
 		}
 
 		if len(svc.Status.LoadBalancer.Ingress) > 1 {
-			fmt.Print("more than one ingress not supported")
-			os.Exit(1)
+			// Print a warning about the ignored service, no need to crash here
+			logger.Printf("Cannot register service '%s/%s'. More than one ingress is not supported",
+				svc.Namespace, svc.Name)
 		}
 	}
 
-	fmt.Println("Current services and their endpoints:")
-	for _, svc := range extServices {
-		fmt.Println(svc.Name, svc.Namespace, svc.Status.LoadBalancer.Ingress[0])
+	logger.Println("Current services and their endpoints:")
+	logger.Println("=====================================")
+	for _, svc := range services {
+		logger.Println(svc.Name, svc.Namespace, svc.Status.LoadBalancer.Ingress[0])
 	}
 
 	dnsClient, err := google.DefaultClient(context.Background(), dns.NdevClouddnsReadwriteScope)
 	if err != nil {
-		fmt.Printf("Unable to get default client: %v", err)
-		os.Exit(1)
+		logger.Fatalf("Unable to get DNS client: %v", err)
 	}
 
 	dnsService, err := dns.New(dnsClient)
-
-	resp2, err := dnsService.ResourceRecordSets.List("zalando-teapot", "gcp-zalan-do").Do()
 	if err != nil {
-		fmt.Printf("Unable to retrieve resource record sets of zalando-teapot/gcp-zalan-do: %v", err)
-		os.Exit(1)
+		logger.Fatalf("Unable to create DNS client: %v", err)
 	}
 
-	records := make([]*dns.ResourceRecordSet, 0, len(resp2.Rrsets))
+	resp, err := dnsService.ResourceRecordSets.List(*project, *zone).Do()
+	if err != nil {
+		logger.Fatalf("Unable to retrieve resource record sets of %s/%s: %v", *project, *zone, err)
+	}
 
-	for _, r := range resp2.Rrsets {
-		if r.Type == "A" && strings.Contains(r.Name, "oolong") {
+	records := make([]*dns.ResourceRecordSet, 0, len(resp.Rrsets))
+
+	for _, r := range resp.Rrsets {
+		if r.Type == "A" && strings.Contains(r.Name, *domain) {
 			records = append(records, r)
 		}
 	}
 
-	fmt.Println("Current A records and where they point to:")
+	logger.Println("Current A records and where they point to:")
+	logger.Println("==========================================")
 	for _, r := range records {
-		fmt.Println(r.Name, r.Type, r.Rrdatas)
+		logger.Println(r.Name, r.Type, r.Rrdatas)
 	}
 
-	change := &dns.Change{}
+	change := new(dns.Change)
 
-	for _, svc := range extServices {
+	for _, svc := range services {
+		var buf bytes.Buffer
+
+		endpoint := Endpoint{
+			Domain:    *domain,
+			Namespace: svc.Namespace,
+			Name:      svc.Name,
+		}
+
+		err = tmpl.Execute(&buf, endpoint)
+		if err != nil {
+			logger.Fatalf("Error applying template: %s", err)
+		}
+
 		change.Additions = append(change.Additions, &dns.ResourceRecordSet{
-			Name:    fmt.Sprintf("%s-%s.oolong.gcp.zalan.do.", svc.Namespace, svc.Name),
+			Name:    buf.String(),
 			Rrdatas: []string{svc.Status.LoadBalancer.Ingress[0].IP},
 			Ttl:     300,
 			Type:    "A",
@@ -103,51 +156,63 @@ func main() {
 		})
 	}
 
-	// spew.Dump(change)
-
-	_, err = dnsService.Changes.Create("zalando-teapot", "gcp-zalan-do", change).Do()
+	_, err = dnsService.Changes.Create(*project, *zone, change).Do()
 	if err != nil {
-		fmt.Printf("Unable to create change for zalando-teapot/gcp-zalan-do: %v", err)
-		os.Exit(1)
+		logger.Fatalf("Unable to create change for %s/%s: %v", *project, *zone, err)
 	}
 
-	// TODO(linki): use watch-only?
-
-	w, err := client.Services(api.NamespaceAll).Watch(api.ListOptions{
+	servicesWatch, err := client.Services(api.NamespaceAll).Watch(api.ListOptions{
 	// better to filter by services that have external IPs here
 	// FieldSelector: fields.OneTermEqualSelector("external ip", "exists"),
 	})
 	if err != nil {
-		fmt.Printf("Unable to watch list of services: %v", err)
-		os.Exit(1)
+		logger.Fatalf("Unable to watch list of services: %v", err)
 	}
-	events := w.ResultChan()
+
+	events := servicesWatch.ResultChan()
 
 	for {
 		event, ok := <-events
 		if !ok {
-			fmt.Println("Channel was closed")
-			os.Exit(1)
+			// If the channel was closed something unexpected happened, let's fail.
+			logger.Fatalf("Unable to read from channel. Channel was closed.")
 		}
 
-		// spew.Dump(event)
-
 		if event.Type == watch.Added || event.Type == watch.Modified {
-			svc := event.Object.(*api.Service)
-			// spew.Dump(*svc)
+			svc, ok := event.Object.(*api.Service)
+			if !ok {
+				// If the object wasn't a Service we can safely ignore it
+				logger.Printf("Cannot cast object to service: %v", svc)
+				continue
+			}
 
-			fmt.Printf("%s: %s/%s\n", event.Type, svc.Namespace, svc.Name)
+			logger.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
 
 			if len(svc.Status.LoadBalancer.Ingress) > 1 {
-				fmt.Print("more than one ingress not supported")
-				os.Exit(1)
+				// Print a warning about the ignored service, no need to crash here
+				logger.Printf("Cannot register service '%s/%s'. More than one ingress is not supported",
+					svc.Namespace, svc.Name)
+				continue
 			}
 
 			if len(svc.Status.LoadBalancer.Ingress) == 1 {
+				var buf bytes.Buffer
+
+				endpoint := Endpoint{
+					Domain:    *domain,
+					Namespace: svc.Namespace,
+					Name:      svc.Name,
+				}
+
+				err = tmpl.Execute(&buf, endpoint)
+				if err != nil {
+					logger.Fatalf("Error applying template: %s", err)
+				}
+
 				change := &dns.Change{
 					Additions: []*dns.ResourceRecordSet{
 						&dns.ResourceRecordSet{
-							Name:    fmt.Sprintf("%s-%s.oolong.gcp.zalan.do.", svc.Namespace, svc.Name),
+							Name:    buf.String(),
 							Rrdatas: []string{svc.Status.LoadBalancer.Ingress[0].IP},
 							Ttl:     300,
 							Type:    "A",
@@ -155,36 +220,52 @@ func main() {
 					},
 				}
 
-				// spew.Dump(change)
+				time.Sleep(100 * time.Millisecond)
 
-				_, err2 := dnsService.Changes.Create("zalando-teapot", "gcp-zalan-do", change).Do()
-				if err2 != nil {
-					if !strings.Contains(err2.Error(), "alreadyExists") {
-						fmt.Printf("Unable to create change for zalando-teapot/gcp-zalan-do: %v", err2)
-						os.Exit(1)
+				_, err := dnsService.Changes.Create(*project, *zone, change).Do()
+				if err != nil {
+					if !strings.Contains(err.Error(), "alreadyExists") {
+						logger.Fatalf("Unable to create change for %s/%s: %v", *project, *zone, err)
 					}
 				}
-
-				time.Sleep(time.Second)
 			}
 		}
 
 		if event.Type == watch.Deleted {
 			svc := event.Object.(*api.Service)
-			// spew.Dump(*svc)
+			if !ok {
+				// If the object wasn't a Service we can safely ignore it
+				logger.Printf("Cannot cast object to service: %v", svc)
+				continue
+			}
 
-			fmt.Printf("%s: %s/%s\n", event.Type, svc.Namespace, svc.Name)
+			logger.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
 
 			if len(svc.Status.LoadBalancer.Ingress) > 1 {
-				fmt.Print("more than one ingress not supported")
-				os.Exit(1)
+				// Print a warning about the ignored service, no need to crash here
+				logger.Printf("Cannot deregister service '%s/%s'. More than one ingress is not supported",
+					svc.Namespace, svc.Name)
+				continue
 			}
 
 			if len(svc.Status.LoadBalancer.Ingress) == 1 {
+				var buf bytes.Buffer
+
+				endpoint := Endpoint{
+					Domain:    *domain,
+					Namespace: svc.Namespace,
+					Name:      svc.Name,
+				}
+
+				err = tmpl.Execute(&buf, endpoint)
+				if err != nil {
+					logger.Fatalf("Error applying template: %s", err)
+				}
+
 				change := &dns.Change{
 					Deletions: []*dns.ResourceRecordSet{
 						&dns.ResourceRecordSet{
-							Name:    fmt.Sprintf("%s-%s.oolong.gcp.zalan.do.", svc.Namespace, svc.Name),
+							Name:    buf.String(),
 							Rrdatas: []string{svc.Status.LoadBalancer.Ingress[0].IP},
 							Ttl:     300,
 							Type:    "A",
@@ -192,24 +273,19 @@ func main() {
 					},
 				}
 
-				spew.Dump(change)
+				time.Sleep(100 * time.Millisecond)
 
-				_, err2 := dnsService.Changes.Create("zalando-teapot", "gcp-zalan-do", change).Do()
-				if err2 != nil {
-					if !strings.Contains(err2.Error(), "notFound") {
-						fmt.Printf("Unable to create change for zalando-teapot/gcp-zalan-do: %v", err2)
-						os.Exit(1)
+				_, err := dnsService.Changes.Create(*project, *zone, change).Do()
+				if err != nil {
+					if !strings.Contains(err.Error(), "notFound") {
+						logger.Fatalf("Unable to create change for %s/%s: %v", *project, *zone, err)
 					}
 				}
-
-				time.Sleep(time.Second)
 			}
 		}
 
 		if event.Type == watch.Error {
-			spew.Dump(event)
-			fmt.Print("watch got an error event")
-			os.Exit(1)
+			logger.Fatalf("Event listener received an error, terminating: %v", event)
 		}
 	}
 }

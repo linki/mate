@@ -12,4 +12,19 @@ spec:
     spec:
       containers:
       - name: mate
-        image: pierone.stups.zalan.do/teapot/mate:v0.0.1-SNAPSHOT
+        image: pierone.stups.zalan.do/teapot/mate:v0.0.2-SNAPSHOT
+        args:
+        - --project=zalando-teapot
+        - --zone=gcp-zalan-do
+        - --domain=oolong.gcp.zalan.do
+        - --format={{.Namespace}}-{{.Name}}.{{.Domain}}.
+        # or maybe those are better?
+        # - --format={{trimPrefix .Namespace "zalando-"}}-{{trimPrefix .Name "cluster-"}}.{{.Domain}}.
+      - name: proxy
+        image: wernight/kubectl:latest
+        command:
+        - kubectl
+        args:
+        - proxy
+        - --port=8080
+        - --v=8

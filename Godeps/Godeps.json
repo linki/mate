@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/linki/mate",
+	"ImportPath": "github.com/zalando-teapot/mate",
 	"GoVersion": "go1.6",
 	"GodepVersion": "v72",
 	"Deps": [
@@ -7,6 +7,18 @@
 			"ImportPath": "github.com/Sirupsen/logrus",
 			"Comment": "v0.8.6-1-g8bca266",
 			"Rev": "8bca2664072173a3c71db4c28ca8d304079b1787"
+		},
+		{
+			"ImportPath": "github.com/alecthomas/template",
+			"Rev": "a0175ee3bccc567396460bf5acd36800cb10c49c"
+		},
+		{
+			"ImportPath": "github.com/alecthomas/template/parse",
+			"Rev": "a0175ee3bccc567396460bf5acd36800cb10c49c"
+		},
+		{
+			"ImportPath": "github.com/alecthomas/units",
+			"Rev": "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a"
 		},
 		{
 			"ImportPath": "github.com/beorn7/perks/quantile",
@@ -272,6 +284,11 @@
 		{
 			"ImportPath": "google.golang.org/cloud/internal",
 			"Rev": "4da660f59adf463f364fca03a6f8422758101a84"
+		},
+		{
+			"ImportPath": "gopkg.in/alecthomas/kingpin.v2",
+			"Comment": "v2.1.11",
+			"Rev": "8cccfa8eb2e3183254457fb1749b2667fbc364c7"
 		},
 		{
 			"ImportPath": "gopkg.in/inf.v0",
