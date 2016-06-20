@@ -1,6 +1,6 @@
 FROM golang:1.6.2-alpine
 
-RUN apk --no-cache add gcc g++
+RUN apk --no-cache add ca-certificates gcc g++
 
 RUN mkdir -p /go/src/app
 WORKDIR /go/src/app
