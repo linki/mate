@@ -61,6 +61,8 @@ func main() {
 	config := &restclient.Config{
 		Host: *master,
 	}
+
+	for {
 	client, err := client.New(config)
 	if err != nil {
 		logger.Fatalf("Unable to connect to API server: %v", err)
@@ -174,8 +176,11 @@ func main() {
 	for {
 		event, ok := <-events
 		if !ok {
-			// If the channel was closed something unexpected happened, let's fail.
-			logger.Fatalf("Unable to read from channel. Channel was closed.")
+			// The channel closes regularly in which case we restart the watch
+			logger.Printf("Unable to read from channel. Channel was closed. Trying to restart watch...")
+
+			// break this watch loop
+			break
 		}
 
 		if event.Type == watch.Added || event.Type == watch.Modified {
@@ -287,5 +292,6 @@ func main() {
 		if event.Type == watch.Error {
 			logger.Fatalf("Event listener received an error, terminating: %v", event)
 		}
+	}
 	}
 }
