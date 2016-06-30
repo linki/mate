@@ -1,5 +1,5 @@
 BINARY        ?= mate
-VERSION       ?= $(shell git describe --tags --dirty)
+VERSION       ?= $(shell git describe --tags --always --dirty)
 IMAGE         ?= pierone.stups.zalan.do/teapot/mate
 TAG           ?= $(VERSION)
 BUILD_FLAGS   ?= -v
