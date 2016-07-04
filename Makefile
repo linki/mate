@@ -8,7 +8,7 @@ GITHEAD       = $(shell git rev-parse --short HEAD)
 GITURL        = $(shell git config --get remote.origin.url)
 GITSTATUS     = $(shell git status --porcelain || echo "no changes")
 BUILD_FLAGS   ?= -v
-LDFLAGS       ?= -X main.version=$(VERSION)
+LDFLAGS       ?= -X main.version=$(VERSION) -linkmode external -extldflags '-static'
 
 default: build.local
 
