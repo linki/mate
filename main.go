@@ -39,7 +39,7 @@ var (
 	zone    = kingpin.Flag("zone", "Name of the zone to manage.").String()
 	format  = kingpin.Flag("format", "Format of DNS entries").Default(defaultFormat).String()
 
-	// version is injected at build-time
+	// version is injected at link-time
 	version = "Unknown"
 )
 
