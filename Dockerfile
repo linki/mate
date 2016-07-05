@@ -1,15 +1,9 @@
-FROM golang:1.6.2-alpine
+FROM registry.opensource.zalan.do/stups/alpine:3.4-2
 
-RUN apk --no-cache add ca-certificates gcc g++
+# add scm-source
+ADD scm-source.json /
 
-RUN mkdir -p /go/src/app
-WORKDIR /go/src/app
+# add binary
+ADD build/linux/mate /
 
-ENTRYPOINT ["/go/bin/app"]
-CMD []
-
-COPY vendor /go/src/app/vendor
-COPY main.go /go/src/app/
-
-RUN go get -v -d
-RUN go install -v
+ENTRYPOINT ["/mate"]

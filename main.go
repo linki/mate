@@ -38,10 +38,13 @@ var (
 	project = kingpin.Flag("project", "Project ID that manages the zone").Required().String()
 	zone    = kingpin.Flag("zone", "Name of the zone to manage.").String()
 	format  = kingpin.Flag("format", "Format of DNS entries").Default(defaultFormat).String()
+
+	// version is injected at link-time
+	version = "Unknown"
 )
 
 func main() {
-	kingpin.Version("0.0.2")
+	kingpin.Version(version)
 	kingpin.Parse()
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
