@@ -8,7 +8,7 @@ GITHEAD       = $(shell git rev-parse --short HEAD)
 GITURL        = $(shell git config --get remote.origin.url)
 GITSTATUS     = $(shell git status --porcelain || echo "no changes")
 BUILD_FLAGS   ?= -v
-LDFLAGS       ?= -X main.version=$(VERSION) -linkmode external -extldflags '-static' -w -s
+LDFLAGS       ?= -X main.version=$(VERSION) -w -s
 
 default: build.local
 
@@ -27,7 +27,7 @@ build.local: prepare $(wildcard *.go) $(wildcard */*.go)
 	go build -o build/"$(BINARY)" "$(BUILD_FLAGS)" -ldflags "$(LDFLAGS)" .
 
 build.linux: prepare $(wildcard *.go) $(wildcard */*.go)
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build "$(BUILD_FLAGS)" -o build/linux/"$(BINARY)" -ldflags "$(LDFLAGS)" .
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build "$(BUILD_FLAGS)" -o build/linux/"$(BINARY)" -ldflags "$(LDFLAGS) -linkmode external -extldflags '-static'" .
 
 build.osx: prepare $(wildcard *.go) $(wildcard */*.go)
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build "$(BUILD_FLAGS)" -o build/osx/"$(BINARY)" -ldflags "$(LDFLAGS)" .
