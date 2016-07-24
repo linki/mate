@@ -1,303 +1,101 @@
 package main
 
 import (
-	"bytes"
-	"log"
-	"os"
-	"strings"
-	"text/template"
+	"fmt"
 	"time"
 
-	"golang.org/x/net/context"
-	"golang.org/x/oauth2/google"
-	dns "google.golang.org/api/dns/v1"
-
+	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/watch"
-
-	"github.bus.zalan.do/teapot/mate/pkg/kubernetes"
+	"github.bus.zalan.do/teapot/mate/providers"
 )
 
-type Endpoint struct {
-	Domain    string
-	Namespace string
-	Name      string
-}
-
 const (
-	defaultDomain = "oolong.gcp.zalan.do"
-	defaultMaster = "http://127.0.0.1:8080"
-	defaultFormat = "{{.Namespace}}-{{.Name}}.{{.Domain}}."
+	defaultInterval = 10 * time.Minute
 )
 
 var params struct {
-	master  string
-	domain  string
-	project string
-	zone    string
-	format  string
+	endpoints string
+	dns       string
+	interval  time.Duration
+	once      bool
+	debug     bool
 }
 
-var (
-	// version is injected at link-time
-	version = "Unknown"
-)
+var version = "Unknown"
 
 func init() {
-	kingpin.Flag("master", "The address of the Kubernetes API server.").Default(defaultMaster).StringVar(&params.master)
-	kingpin.Flag("domain", "The DNS domain by which cluster endpoints are reachable.").Default(defaultDomain).StringVar(&params.domain)
-	kingpin.Flag("project", "Project ID that manages the zone").Required().StringVar(&params.project)
-	kingpin.Flag("zone", "Name of the zone to manage.").StringVar(&params.zone)
-	kingpin.Flag("format", "Format of DNS entries").Default(defaultFormat).StringVar(&params.format)
+	kingpin.Flag("endpoints-provider", "The endpoints provider to use.").Short('e').Required().StringVar(&params.endpoints)
+	kingpin.Flag("dns-provider", "The DNS provider to use.").Short('d').Required().StringVar(&params.dns)
+	kingpin.Flag("interval", "Interval in Duration format, e.g. 60s.").Short('i').Default(defaultInterval.String()).DurationVar(&params.interval)
+	kingpin.Flag("once", "Run once and exit").BoolVar(&params.once)
+	kingpin.Flag("debug", "Enable debug logging.").BoolVar(&params.debug)
 }
 
 func main() {
 	kingpin.Version(version)
 	kingpin.Parse()
 
-	logger := log.New(os.Stdout, "", log.LstdFlags)
-
-	if params.zone == "" {
-		params.zone = strings.Replace(params.domain, ".", "-", -1)
-		logger.Printf("No --zone provided, inferring from domain: '%s'.", params.zone)
+	if params.debug {
+		log.SetLevel(log.DebugLevel)
 	}
 
-	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
-		"trimPrefix": strings.TrimPrefix,
-	}).Parse(params.format)
+	p, err := endpointsProvider(params.endpoints)
 	if err != nil {
-		logger.Fatalf("Error parsing template: %s", err)
+		log.Fatalf("Error creating endpoints provider: %v", err)
 	}
 
-	client := kubernetes.NewHealthyClient(params.master)
+	d, err := dnsProvider(params.dns)
+	if err != nil {
+		log.Fatalf("Error creating DNS provider: %v", err)
+	}
 
 	for {
-		allServices, err := client.Services(api.NamespaceAll).List(api.ListOptions{
-		// better to filter by services that have external IPs here
-		// FieldSelector: fields.OneTermEqualSelector("external ip", "exists"),
-		})
+		endpoints, err := p.Endpoints()
 		if err != nil {
-			logger.Fatalf("Unable to retrieve list of services: %v", err)
+			log.Fatalf("Unable to get list of endpoints from endpoint provider: %v", err)
 		}
 
-		services := make([]api.Service, 0, len(allServices.Items))
-
-		for _, svc := range allServices.Items {
-			if len(svc.Status.LoadBalancer.Ingress) == 1 {
-				services = append(services, svc)
-			}
-
-			if len(svc.Status.LoadBalancer.Ingress) > 1 {
-				// Print a warning about the ignored service, no need to crash here
-				logger.Printf("Cannot register service '%s/%s'. More than one ingress is not supported",
-					svc.Namespace, svc.Name)
-			}
-		}
-
-		logger.Println("Current services and their endpoints:")
-		logger.Println("=====================================")
-		for _, svc := range services {
-			logger.Println(svc.Name, svc.Namespace, svc.Status.LoadBalancer.Ingress[0])
-		}
-
-		dnsClient, err := google.DefaultClient(context.Background(), dns.NdevClouddnsReadwriteScope)
+		err = d.Sync(endpoints)
 		if err != nil {
-			logger.Fatalf("Unable to get DNS client: %v", err)
+			log.Fatalf("Unable to sync DNS entries with DNS provider: %v", err)
 		}
 
-		dnsService, err := dns.New(dnsClient)
-		if err != nil {
-			logger.Fatalf("Unable to create DNS client: %v", err)
+		if params.once {
+			break
 		}
 
-		resp, err := dnsService.ResourceRecordSets.List(params.project, params.zone).Do()
-		if err != nil {
-			logger.Fatalf("Unable to retrieve resource record sets of %s/%s: %v", params.project, params.zone, err)
-		}
-
-		records := make([]*dns.ResourceRecordSet, 0, len(resp.Rrsets))
-
-		for _, r := range resp.Rrsets {
-			if r.Type == "A" && strings.Contains(r.Name, params.domain) {
-				records = append(records, r)
-			}
-		}
-
-		logger.Println("Current A records and where they point to:")
-		logger.Println("==========================================")
-		for _, r := range records {
-			logger.Println(r.Name, r.Type, r.Rrdatas)
-		}
-
-		change := new(dns.Change)
-
-		for _, svc := range services {
-			var buf bytes.Buffer
-
-			endpoint := Endpoint{
-				Domain:    params.domain,
-				Namespace: svc.Namespace,
-				Name:      svc.Name,
-			}
-
-			err = tmpl.Execute(&buf, endpoint)
-			if err != nil {
-				logger.Fatalf("Error applying template: %s", err)
-			}
-
-			change.Additions = append(change.Additions, &dns.ResourceRecordSet{
-				Name:    buf.String(),
-				Rrdatas: []string{svc.Status.LoadBalancer.Ingress[0].IP},
-				Ttl:     300,
-				Type:    "A",
-			})
-		}
-
-		for _, r := range records {
-			change.Deletions = append(change.Deletions, &dns.ResourceRecordSet{
-				Name:    r.Name,
-				Rrdatas: r.Rrdatas,
-				Ttl:     r.Ttl,
-				Type:    r.Type,
-			})
-		}
-
-		_, err = dnsService.Changes.Create(params.project, params.zone, change).Do()
-		if err != nil {
-			logger.Fatalf("Unable to create change for %s/%s: %v", params.project, params.zone, err)
-		}
-
-		servicesWatch, err := client.Services(api.NamespaceAll).Watch(api.ListOptions{
-		// better to filter by services that have external IPs here
-		// FieldSelector: fields.OneTermEqualSelector("external ip", "exists"),
-		})
-		if err != nil {
-			logger.Fatalf("Unable to watch list of services: %v", err)
-		}
-
-		events := servicesWatch.ResultChan()
-
-		for {
-			event, ok := <-events
-			if !ok {
-				// The channel closes regularly in which case we restart the watch
-				logger.Printf("Unable to read from channel. Channel was closed. Trying to restart watch...")
-
-				// break this watch loop
-				break
-			}
-
-			if event.Type == watch.Added || event.Type == watch.Modified {
-				svc, ok := event.Object.(*api.Service)
-				if !ok {
-					// If the object wasn't a Service we can safely ignore it
-					logger.Printf("Cannot cast object to service: %v", svc)
-					continue
-				}
-
-				logger.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
-
-				if len(svc.Status.LoadBalancer.Ingress) > 1 {
-					// Print a warning about the ignored service, no need to crash here
-					logger.Printf("Cannot register service '%s/%s'. More than one ingress is not supported",
-						svc.Namespace, svc.Name)
-					continue
-				}
-
-				if len(svc.Status.LoadBalancer.Ingress) == 1 {
-					var buf bytes.Buffer
-
-					endpoint := Endpoint{
-						Domain:    params.domain,
-						Namespace: svc.Namespace,
-						Name:      svc.Name,
-					}
-
-					err = tmpl.Execute(&buf, endpoint)
-					if err != nil {
-						logger.Fatalf("Error applying template: %s", err)
-					}
-
-					change := &dns.Change{
-						Additions: []*dns.ResourceRecordSet{
-							&dns.ResourceRecordSet{
-								Name:    buf.String(),
-								Rrdatas: []string{svc.Status.LoadBalancer.Ingress[0].IP},
-								Ttl:     300,
-								Type:    "A",
-							},
-						},
-					}
-
-					time.Sleep(100 * time.Millisecond)
-
-					_, err := dnsService.Changes.Create(params.project, params.zone, change).Do()
-					if err != nil {
-						if !strings.Contains(err.Error(), "alreadyExists") {
-							logger.Fatalf("Unable to create change for %s/%s: %v", params.project, params.zone, err)
-						}
-					}
-				}
-			}
-
-			if event.Type == watch.Deleted {
-				svc := event.Object.(*api.Service)
-				if !ok {
-					// If the object wasn't a Service we can safely ignore it
-					logger.Printf("Cannot cast object to service: %v", svc)
-					continue
-				}
-
-				logger.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
-
-				if len(svc.Status.LoadBalancer.Ingress) > 1 {
-					// Print a warning about the ignored service, no need to crash here
-					logger.Printf("Cannot deregister service '%s/%s'. More than one ingress is not supported",
-						svc.Namespace, svc.Name)
-					continue
-				}
-
-				if len(svc.Status.LoadBalancer.Ingress) == 1 {
-					var buf bytes.Buffer
-
-					endpoint := Endpoint{
-						Domain:    params.domain,
-						Namespace: svc.Namespace,
-						Name:      svc.Name,
-					}
-
-					err = tmpl.Execute(&buf, endpoint)
-					if err != nil {
-						logger.Fatalf("Error applying template: %s", err)
-					}
-
-					change := &dns.Change{
-						Deletions: []*dns.ResourceRecordSet{
-							&dns.ResourceRecordSet{
-								Name:    buf.String(),
-								Rrdatas: []string{svc.Status.LoadBalancer.Ingress[0].IP},
-								Ttl:     300,
-								Type:    "A",
-							},
-						},
-					}
-
-					time.Sleep(100 * time.Millisecond)
-
-					_, err := dnsService.Changes.Create(params.project, params.zone, change).Do()
-					if err != nil {
-						if !strings.Contains(err.Error(), "notFound") {
-							logger.Fatalf("Unable to create change for %s/%s: %v", params.project, params.zone, err)
-						}
-					}
-				}
-			}
-
-			if event.Type == watch.Error {
-				logger.Fatalf("Event listener received an error, terminating: %v", event)
-			}
-		}
+		log.Printf("Sleeping for %s", params.interval)
+		time.Sleep(params.interval)
 	}
+}
+
+func endpointsProvider(name string) (providers.EndpointsProvider, error) {
+	switch name {
+	case "kubernetes":
+		p, err := providers.NewKubernetesProvider()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to initialize Kubernetes provider: %v", err)
+		}
+		return p, nil
+	case "lushan":
+		p, err := providers.NewLushanProvider()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to initialize Lushan provider: %v", err)
+		}
+		return p, nil
+	}
+	return nil, fmt.Errorf("Unknown endpoints provider '%s'.", name)
+}
+
+func dnsProvider(name string) (providers.DNSProvider, error) {
+	switch name {
+	case "google":
+		p, err := providers.NewGoogleCloudDNSProvider()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to initialize Google Cloud DNS provider: %v", err)
+		}
+		return p, nil
+	}
+	return nil, fmt.Errorf("Unknown DNS provider '%s'.", name)
 }
