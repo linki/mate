@@ -32,16 +32,26 @@ const (
 	defaultFormat = "{{.Namespace}}-{{.Name}}.{{.Domain}}."
 )
 
-var (
-	master  = kingpin.Flag("master", "The address of the Kubernetes API server.").Default(defaultMaster).String()
-	domain  = kingpin.Flag("domain", "The DNS domain by which cluster endpoints are reachable.").Default(defaultDomain).String()
-	project = kingpin.Flag("project", "Project ID that manages the zone").Required().String()
-	zone    = kingpin.Flag("zone", "Name of the zone to manage.").String()
-	format  = kingpin.Flag("format", "Format of DNS entries").Default(defaultFormat).String()
+var params struct {
+	master  string
+	domain  string
+	project string
+	zone    string
+	format  string
+}
 
+var (
 	// version is injected at link-time
 	version = "Unknown"
 )
+
+func init() {
+	kingpin.Flag("master", "The address of the Kubernetes API server.").Default(defaultMaster).StringVar(&params.master)
+	kingpin.Flag("domain", "The DNS domain by which cluster endpoints are reachable.").Default(defaultDomain).StringVar(&params.domain)
+	kingpin.Flag("project", "Project ID that manages the zone").Required().StringVar(&params.project)
+	kingpin.Flag("zone", "Name of the zone to manage.").StringVar(&params.zone)
+	kingpin.Flag("format", "Format of DNS entries").Default(defaultFormat).StringVar(&params.format)
+}
 
 func main() {
 	kingpin.Version(version)
@@ -49,20 +59,20 @@ func main() {
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 
-	if *zone == "" {
-		*zone = strings.Replace(*domain, ".", "-", -1)
-		logger.Printf("No --zone provided, inferring from domain: '%s'.", *zone)
+	if params.zone == "" {
+		params.zone = strings.Replace(params.domain, ".", "-", -1)
+		logger.Printf("No --zone provided, inferring from domain: '%s'.", params.zone)
 	}
 
 	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
 		"trimPrefix": strings.TrimPrefix,
-	}).Parse(*format)
+	}).Parse(params.format)
 	if err != nil {
 		logger.Fatalf("Error parsing template: %s", err)
 	}
 
 	config := &restclient.Config{
-		Host: *master,
+		Host: params.master,
 	}
 
 	for {
@@ -109,15 +119,15 @@ func main() {
 			logger.Fatalf("Unable to create DNS client: %v", err)
 		}
 
-		resp, err := dnsService.ResourceRecordSets.List(*project, *zone).Do()
+		resp, err := dnsService.ResourceRecordSets.List(params.project, params.zone).Do()
 		if err != nil {
-			logger.Fatalf("Unable to retrieve resource record sets of %s/%s: %v", *project, *zone, err)
+			logger.Fatalf("Unable to retrieve resource record sets of %s/%s: %v", params.project, params.zone, err)
 		}
 
 		records := make([]*dns.ResourceRecordSet, 0, len(resp.Rrsets))
 
 		for _, r := range resp.Rrsets {
-			if r.Type == "A" && strings.Contains(r.Name, *domain) {
+			if r.Type == "A" && strings.Contains(r.Name, params.domain) {
 				records = append(records, r)
 			}
 		}
@@ -134,7 +144,7 @@ func main() {
 			var buf bytes.Buffer
 
 			endpoint := Endpoint{
-				Domain:    *domain,
+				Domain:    params.domain,
 				Namespace: svc.Namespace,
 				Name:      svc.Name,
 			}
@@ -161,9 +171,9 @@ func main() {
 			})
 		}
 
-		_, err = dnsService.Changes.Create(*project, *zone, change).Do()
+		_, err = dnsService.Changes.Create(params.project, params.zone, change).Do()
 		if err != nil {
-			logger.Fatalf("Unable to create change for %s/%s: %v", *project, *zone, err)
+			logger.Fatalf("Unable to create change for %s/%s: %v", params.project, params.zone, err)
 		}
 
 		servicesWatch, err := client.Services(api.NamespaceAll).Watch(api.ListOptions{
@@ -207,7 +217,7 @@ func main() {
 					var buf bytes.Buffer
 
 					endpoint := Endpoint{
-						Domain:    *domain,
+						Domain:    params.domain,
 						Namespace: svc.Namespace,
 						Name:      svc.Name,
 					}
@@ -230,10 +240,10 @@ func main() {
 
 					time.Sleep(100 * time.Millisecond)
 
-					_, err := dnsService.Changes.Create(*project, *zone, change).Do()
+					_, err := dnsService.Changes.Create(params.project, params.zone, change).Do()
 					if err != nil {
 						if !strings.Contains(err.Error(), "alreadyExists") {
-							logger.Fatalf("Unable to create change for %s/%s: %v", *project, *zone, err)
+							logger.Fatalf("Unable to create change for %s/%s: %v", params.project, params.zone, err)
 						}
 					}
 				}
@@ -260,7 +270,7 @@ func main() {
 					var buf bytes.Buffer
 
 					endpoint := Endpoint{
-						Domain:    *domain,
+						Domain:    params.domain,
 						Namespace: svc.Namespace,
 						Name:      svc.Name,
 					}
@@ -283,10 +293,10 @@ func main() {
 
 					time.Sleep(100 * time.Millisecond)
 
-					_, err := dnsService.Changes.Create(*project, *zone, change).Do()
+					_, err := dnsService.Changes.Create(params.project, params.zone, change).Do()
 					if err != nil {
 						if !strings.Contains(err.Error(), "notFound") {
-							logger.Fatalf("Unable to create change for %s/%s: %v", *project, *zone, err)
+							logger.Fatalf("Unable to create change for %s/%s: %v", params.project, params.zone, err)
 						}
 					}
 				}
