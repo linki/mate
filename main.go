@@ -15,9 +15,9 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/restclient"
-	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/watch"
+
+	"github.bus.zalan.do/teapot/mate/pkg/kubernetes"
 )
 
 type Endpoint struct {
@@ -71,16 +71,9 @@ func main() {
 		logger.Fatalf("Error parsing template: %s", err)
 	}
 
-	config := &restclient.Config{
-		Host: params.master,
-	}
+	client := kubernetes.NewHealthyClient(params.master)
 
 	for {
-		client, err := client.New(config)
-		if err != nil {
-			logger.Fatalf("Unable to connect to API server: %v", err)
-		}
-
 		allServices, err := client.Services(api.NamespaceAll).List(api.ListOptions{
 		// better to filter by services that have external IPs here
 		// FieldSelector: fields.OneTermEqualSelector("external ip", "exists"),
