@@ -22,8 +22,8 @@ type googleDNSConsumer struct {
 
 func init() {
 	//	kingpin.Flag("gcloud-domain", "The DNS domain to create DNS entries under.").StringVar(params.domain)
-	kingpin.Flag("gcloud-project", "Project ID that manages the zone").StringVar(&params.project)
-	kingpin.Flag("gcloud-zone", "Name of the zone to manage.").StringVar(&params.zone)
+	kingpin.Flag("google-project", "Project ID that manages the zone").StringVar(&params.project)
+	kingpin.Flag("google-zone", "Name of the zone to manage.").StringVar(&params.zone)
 }
 
 func NewGoogleDNS() (*googleDNSConsumer, error) {
