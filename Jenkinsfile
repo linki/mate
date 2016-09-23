@@ -5,7 +5,7 @@ go {
     if ("master".equals(env.BRANCH_NAME)) {
         docker.login()
         buildStep("Build and push docker image") {
-            go.run("make build.push")
+            stups.run("make build.push")
         }
     }
 }
