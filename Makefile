@@ -1,4 +1,4 @@
-.PHONY: clean clean check docker scm-source
+.PHONY: clean check build.local build.linux build.osx build.docker build.push
 
 BINARY        ?= mate
 VERSION       ?= $(shell git describe --tags --always --dirty)
@@ -7,6 +7,9 @@ TAG           ?= $(VERSION)
 GITHEAD       = $(shell git rev-parse --short HEAD)
 GITURL        = $(shell git config --get remote.origin.url)
 GITSTATUS     = $(shell git status --porcelain || echo "no changes")
+SOURCES       = $(shell find . -name '*.go')
+DOCKERFILE    ?= Dockerfile
+GOPKGS        = $(shell go list ./... | grep -v /vendor/)
 BUILD_FLAGS   ?= -v
 LDFLAGS       ?= -X main.version=$(VERSION) -w -s
 
@@ -15,28 +18,34 @@ default: build.local
 clean:
 	rm -rf build
 
+test:
+	go test -v $(GOPKGS)
+
 check:
-	golint ./... | egrep -v '^vendor/'
-	go vet -v ./... 2>&1 | egrep -v '^(vendor/|exit status 1)'
+	golint $(GOPKGS)
+	go vet -v $(GOPKGS)
 
-prepare:
-	mkdir -p build/linux
-	mkdir -p build/osx
+build.local: build/$(BINARY)
+build.linux: build/linux/$(BINARY)
+build.osx: build/osx/$(BINARY)
 
-build.local: prepare $(wildcard *.go) $(wildcard */*.go)
-	go build -o build/"$(BINARY)" "$(BUILD_FLAGS)" -ldflags "$(LDFLAGS)" .
+build/$(BINARY): $(SOURCES)
+	go build -o build/$(BINARY) $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" .
 
-build.linux: prepare $(wildcard *.go) $(wildcard */*.go)
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build "$(BUILD_FLAGS)" -o build/linux/"$(BINARY)" -ldflags "$(LDFLAGS) -linkmode external -extldflags '-static'" .
+build/linux/$(BINARY): $(SOURCES)
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(BUILD_FLAGS) -o build/linux/$(BINARY) -ldflags "$(LDFLAGS) -linkmode external -extldflags '-static'" .
 
-build.osx: prepare $(wildcard *.go) $(wildcard */*.go)
-	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build "$(BUILD_FLAGS)" -o build/osx/"$(BINARY)" -ldflags "$(LDFLAGS)" .
+build/osx/$(BINARY): $(SOURCES)
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build $(BUILD_FLAGS) -o build/osx/$(BINARY) -ldflags "$(LDFLAGS)" .
 
-build.docker: scm-source build.linux
-	docker build -t "$(IMAGE):$(TAG)" .
+$(DOCKERFILE).upstream: $(DOCKERFILE)
+	sed "s@UPSTREAM@$(shell $(shell head -1 $(DOCKERFILE) | sed -E 's@FROM (.*)/(.*)/(.*):.*@pierone latest \2 \3 --url \1@'))@" $(DOCKERFILE) > $(DOCKERFILE).upstream
+
+build.docker: $(DOCKERFILE).upstream scm-source.json build.linux
+	docker build --rm -t "$(IMAGE):$(TAG)" -f $(DOCKERFILE).upstream .
 
 build.push: build.docker
 	docker push "$(IMAGE):$(TAG)"
 
-scm-source:
-	@echo "{\"url\": \"$(GITURL)\", \"revision\": \"$(GITHEAD)\", \"status\": \"$(GITSTATUS)\"}" > scm-source.json
+scm-source.json: .git
+	@echo '{"url": "$(GITURL)", "revision": "$(GITHEAD)", "author": "$(USER)", "status": "$(GITSTATUS)"}' > scm-source.json
