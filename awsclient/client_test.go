@@ -90,7 +90,8 @@ func TestAWSWithProvider(t *testing.T) {
 	for _, sc := range setsCheck {
 		var found bool
 		for _, s := range sets {
-			if strings.TrimSuffix(s.DNSName, ".") == strings.TrimSuffix(sc.DNSName, ".") && s.IP == sc.IP {
+			if strings.TrimSuffix(s.DNSName, ".") == strings.TrimSuffix(sc.DNSName, ".") &&
+				s.IP == sc.IP {
 				found = true
 				break
 			}

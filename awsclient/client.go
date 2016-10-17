@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	defaultRole            = "Shibboleth-PowerUser"
 	defaultSessionDuration = 30 * time.Minute
 	defaultTTL             = 300
 )
@@ -47,10 +46,6 @@ type Client struct {
 var ErrInvalidAWSResponse = errors.New("invalid AWS response")
 
 func New(o Options) *Client {
-	if o.Role == "" {
-		o.Role = defaultRole
-	}
-
 	if o.SessionDuration <= 0 {
 		o.SessionDuration = defaultSessionDuration
 	}
