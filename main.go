@@ -50,7 +50,7 @@ func main() {
 		log.Fatalf("Error creating producer: %v", err)
 	}
 
-	c, err := consumers.New(params.consumer)
+	c, err := consumers.New(consumers.Options{Name: params.consumer})
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}

@@ -24,7 +24,7 @@ func init() {
 	kingpin.Flag("google-zone", "Name of the zone to manage.").StringVar(&params.zone)
 }
 
-func NewGoogleDNS() (*googleDNSConsumer, error) {
+func NewGoogleDNS() (Consumer, error) {
 	if params.zone == "" {
 		return nil, errors.New("Please provide --gcloud-zone")
 	}

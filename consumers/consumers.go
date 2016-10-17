@@ -12,6 +12,12 @@ var params struct {
 	zone    string
 }
 
+// Options are used to initialize a Consumer.
+type Options struct {
+	Name      string
+	AWSClient AWSClient
+}
+
 type Consumer interface {
 	Sync([]*pkg.Endpoint) error
 	Process(*pkg.Endpoint) error
@@ -19,22 +25,30 @@ type Consumer interface {
 
 // Returns a synced Consumer implementation.
 //
-// TODO: consider whether this syncing is necessary,
-// and just drop if not.
-func New(name string) (Consumer, error) {
-	switch name {
+// TODO: consider whether the syncing is necessary,
+// and just drop if not. Usually, it is better to
+// care about syncing in a single place, optimally
+// on the caller side.
+func New(o Options) (Consumer, error) {
+	var (
+		c   Consumer
+		err error
+	)
+
+	switch o.Name {
 	case "google":
-		c, err := NewGoogleDNS()
-		if err != nil {
-			return nil, fmt.Errorf("Error creating Google DNS consumer: %v", err)
-		}
-		return syncedConsumer(c), nil
+		c, err = NewGoogleDNS()
+	case "aws":
+		c = NewAWS(o.AWSClient)
 	case "stdout":
-		c, err := NewStdout()
-		if err != nil {
-			return nil, fmt.Errorf("Error creating Stdout consumer: %v", err)
-		}
-		return syncedConsumer(c), nil
+		c, err = NewStdout()
+	default:
+		return nil, fmt.Errorf("Unknown consumer '%s'.", o.Name)
 	}
-	return nil, fmt.Errorf("Unknown consumer '%s'.", name)
+
+	if err != nil {
+		return nil, fmt.Errorf("error creating Google DNS consumer: %v", err)
+	}
+
+	return syncedConsumer(c), nil
 }

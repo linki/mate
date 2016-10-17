@@ -10,7 +10,7 @@ import (
 // or new file writrer better
 type stdoutConsumer struct{}
 
-func NewStdout() (*stdoutConsumer, error) {
+func NewStdout() (Consumer, error) {
 	return &stdoutConsumer{}, nil
 }
 

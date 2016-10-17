@@ -2,6 +2,9 @@ package awsclient
 
 import (
 	"time"
+	"errors"
+	"fmt"
+	"strings"
 
 	"github.bus.zalan.do/teapot/mate/pkg"
 	"github.com/aws/aws-sdk-go/aws"
@@ -34,6 +37,8 @@ type Client struct {
 	options Options
 }
 
+var ErrInvalidAWSResponse = errors.New("invalid AWS response")
+
 func New(o Options) *Client {
 	if o.Role == "" {
 		o.Role = defaultRole
@@ -57,8 +62,8 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	}
 
 	var changes []*route53.Change
-	changes = append(changes, c.mapChanges("UPSERT", upsert)...)
-	changes = append(changes, c.mapChanges("DELETE", del)...)
+	changes = append(changes, c.mapEndpoints("UPSERT", upsert)...)
+	changes = append(changes, c.mapEndpoints("DELETE", del)...)
 
 	changeSet := &route53.ChangeResourceRecordSetsInput{
 		ChangeBatch:  &route53.ChangeBatch{Changes: changes},
@@ -69,10 +74,43 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	return err
 }
 
+func (c *Client) ListRecordSets() ([]*pkg.Endpoint, error) {
+	client, err := c.initClient()
+	if err != nil {
+		return nil, err
+	}
+
+	zoneID, err := c.getZoneID(client)
+	if err != nil {
+		return nil, err
+	}
+
+	if zoneID == nil {
+		return nil, fmt.Errorf("hosted zone not found: %s", c.options.HostedZone)
+	}
+
+	// TODO: implement paging
+	params := &route53.ListResourceRecordSetsInput{
+		HostedZoneId: zoneID,
+	}
+
+	rsp, err := client.ListResourceRecordSets(params)
+	if err != nil {
+		return nil, err
+	}
+
+	if rsp == nil {
+		return nil, ErrInvalidAWSResponse
+	}
+
+	return mapRecordSets(rsp.ResourceRecordSets), nil
+}
+
 func (c *Client) initClient() (*route53.Route53, error) {
 	// TODO:
 	// - is the parent session really needed, or can it be simplified
-	// - try to reuse based on the session duration
+	// - try to reuse based on the session duration, or, if the error
+	// can be identified, refreshing on auth errors only
 
 	parentSession, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -102,7 +140,7 @@ func (c *Client) initClient() (*route53.Route53, error) {
 	return route53.New(session), nil
 }
 
-func (c *Client) mapRecord(ep *pkg.Endpoint) *route53.ResourceRecordSet {
+func (c *Client) mapEndpoint(ep *pkg.Endpoint) *route53.ResourceRecordSet {
 	ttl := int64(c.options.RecordSetTTL)
 	return &route53.ResourceRecordSet{
 		Name: aws.String(ep.DNSName),
@@ -114,14 +152,59 @@ func (c *Client) mapRecord(ep *pkg.Endpoint) *route53.ResourceRecordSet {
 	}
 }
 
-func (c *Client) mapChanges(action string, endpoints []*pkg.Endpoint) []*route53.Change {
+func (c *Client) mapEndpoints(action string, endpoints []*pkg.Endpoint) []*route53.Change {
 	var changes []*route53.Change
 	for _, ep := range endpoints {
 		changes = append(changes, &route53.Change{
 			Action:            aws.String(action),
-			ResourceRecordSet: c.mapRecord(ep),
+			ResourceRecordSet: c.mapEndpoint(ep),
 		})
 	}
 
 	return changes
+}
+
+func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
+	// TODO: handle when not all hosted zones fit in the response
+	zonesResult, err := ac.ListHostedZones(nil);
+	if err != nil {
+		return nil, err
+	}
+
+	if zonesResult == nil {
+		return nil, ErrInvalidAWSResponse
+	}
+
+	zoneName := c.options.HostedZone
+	if !strings.HasSuffix(zoneName, ".") {
+		zoneName += "."
+	}
+
+	var zoneID *string
+	for _, z := range zonesResult.HostedZones {
+		if aws.StringValue(z.Name) == zoneName {
+			zoneID = z.Id
+			break
+		}
+	}
+
+	return zoneID, nil
+}
+
+func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
+	var endpoints []*pkg.Endpoint
+	for _, s := range sets {
+		if aws.StringValue(s.Type) != "A" {
+			continue
+		}
+
+		var ip string
+		for _, r := range s.ResourceRecords {
+			ip = aws.StringValue(r.Value)
+		}
+
+		endpoints = append(endpoints, &pkg.Endpoint{DNSName: aws.StringValue(s.Name), IP: ip})
+	}
+
+	return endpoints
 }
