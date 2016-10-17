@@ -11,6 +11,7 @@ import (
 const (
 	awsProviderVarName   = "AWS_PROVIDER_TEST"
 	awsHostedZoneVarName = "AWS_HOSTED_ZONE"
+	awsAccountIDVarName  = "AWS_ACCOUNT_ID"
 	awsRoleVarName       = "AWS_ROLE"
 )
 
@@ -27,6 +28,7 @@ func TestAWSWithProvider(t *testing.T) {
 
 	zone := os.Getenv(awsHostedZoneVarName)
 	client := New(Options{
+		AccountID:  os.Getenv(awsAccountIDVarName),
 		Role:       os.Getenv(awsRoleVarName),
 		HostedZone: zone,
 	})

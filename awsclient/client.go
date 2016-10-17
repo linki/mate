@@ -15,14 +15,6 @@ import (
 )
 
 const (
-	pathfinderStagingAccountID = "867616033624"
-	pathfinderAccountID        = "325514449488"
-	teapotAccountID            = "170858875137"
-)
-
-const testAccountID = teapotAccountID
-
-const (
 	defaultRole            = "Shibboleth-PowerUser"
 	defaultSessionDuration = 30 * time.Minute
 	defaultTTL             = 300
@@ -42,9 +34,9 @@ func (l defaultLog) Infoln(args ...interface{}) {
 type Options struct {
 	AccountID       string
 	Role            string
+	HostedZone      string
 	SessionDuration time.Duration
 	RecordSetTTL    int
-	HostedZone      string
 	Log             Logger
 }
 
@@ -70,8 +62,6 @@ func New(o Options) *Client {
 	if o.Log == nil {
 		o.Log = defaultLog{}
 	}
-
-	o.AccountID = testAccountID
 
 	return &Client{o}
 }

@@ -3,6 +3,7 @@ package consumers
 import (
 	"fmt"
 
+	"github.bus.zalan.do/teapot/mate/awsclient"
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
 
@@ -14,8 +15,8 @@ var params struct {
 
 // Options are used to initialize a Consumer.
 type Options struct {
-	Name      string
-	AWSClient AWSClient
+	Name       string
+	AWSOptions awsclient.Options
 }
 
 type Consumer interface {
@@ -39,7 +40,7 @@ func New(o Options) (Consumer, error) {
 	case "google":
 		c, err = NewGoogleDNS()
 	case "aws":
-		c = NewAWS(o.AWSClient)
+		c = NewAWS(awsclient.New(o.AWSOptions))
 	case "stdout":
 		c, err = NewStdout()
 	default:
