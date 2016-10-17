@@ -157,6 +157,31 @@ func TestAWSConsumer(t *testing.T) {
 		}},
 		fail:       true,
 		expectFail: true,
+	}, {
+		msg: "process existing",
+		init: map[string]string{
+			"foo.org": "1.2.3.4",
+			"bar.org": "5.6.7.8",
+		},
+		process:      &pkg.Endpoint{DNSName: "foo.org", IP: "2.3.4.5"},
+		expectUpsert: []*pkg.Endpoint{{DNSName: "foo.org", IP: "2.3.4.5"}},
+	}, {
+		msg: "process new",
+		init: map[string]string{
+			"foo.org": "1.2.3.4",
+			"bar.org": "5.6.7.8",
+		},
+		process:      &pkg.Endpoint{DNSName: "baz.org", IP: "9.0.1.2"},
+		expectUpsert: []*pkg.Endpoint{{DNSName: "baz.org", IP: "9.0.1.2"}},
+	}, {
+		msg: "fail on process",
+		init: map[string]string{
+			"foo.org": "1.2.3.4",
+			"bar.org": "5.6.7.8",
+		},
+		process:    &pkg.Endpoint{DNSName: "foo.org", IP: "2.3.4.5"},
+		fail:       true,
+		expectFail: true,
 	}} {
 		t.Run(ti.msg, func(t *testing.T) {
 			testAWSConsumer(t, ti)

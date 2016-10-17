@@ -46,7 +46,9 @@ func (a *aws) Sync(endpoints []*pkg.Endpoint) error {
 	return nil
 }
 
-func (a *aws) Process(*pkg.Endpoint) error { return nil }
+func (a *aws) Process(endpoint *pkg.Endpoint) error {
+	return a.client.ChangeRecordSets([]*pkg.Endpoint{endpoint}, nil)
+}
 
 func needsUpsert(ep *pkg.Endpoint, currentEndpoints []*pkg.Endpoint) bool {
 	for _, cep := range currentEndpoints {
