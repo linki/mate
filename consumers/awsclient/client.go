@@ -56,13 +56,14 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 		return err
 	}
 
+	var changes []*route53.Change
+	changes = append(changes, c.mapChanges("UPSERT", upsert)...)
+	changes = append(changes, c.mapChanges("DELETE", del)...)
+
 	changeSet := &route53.ChangeResourceRecordSetsInput{
-		ChangeBatch:  &route53.ChangeBatch{},
+		ChangeBatch:  &route53.ChangeBatch{Changes: changes},
 		HostedZoneId: aws.String(c.options.HostedZone),
 	}
-
-	changeSet.ChangeBatch.Changes = append(changeSet.ChangeBatch.Changes, c.mapChanges("UPSERT", upsert)...)
-	changeSet.ChangeBatch.Changes = append(changeSet.ChangeBatch.Changes, c.mapChanges("DELETE", del)...)
 
 	_, err = client.ChangeResourceRecordSets(changeSet)
 	return err
