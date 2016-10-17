@@ -54,7 +54,7 @@ func checkEndpointSlices(got, expect []*pkg.Endpoint) bool {
 	return true
 }
 
-func testAwsConsumer(t *testing.T, ti awsTestItem) {
+func testAWSConsumer(t *testing.T, ti awsTestItem) {
 	client := &awsclienttest.Client{Records: ti.init}
 	if ti.fail {
 		client.FailNext()
@@ -64,7 +64,7 @@ func testAwsConsumer(t *testing.T, ti awsTestItem) {
 		client.Records = make(map[string]string)
 	}
 
-	consumer := NewAws(client)
+	consumer := NewAWS(client)
 
 	if ti.process == nil {
 		err := consumer.Sync(ti.sync)
@@ -87,7 +87,7 @@ func testAwsConsumer(t *testing.T, ti awsTestItem) {
 	}
 }
 
-func TestAwsConsumer(t *testing.T) {
+func TestAWSConsumer(t *testing.T) {
 	for _, ti := range []awsTestItem{{
 		msg: "no initial, no change",
 	}, {
@@ -159,7 +159,7 @@ func TestAwsConsumer(t *testing.T) {
 		expectFail: true,
 	}} {
 		t.Run(ti.msg, func(t *testing.T) {
-			testAwsConsumer(t, ti)
+			testAWSConsumer(t, ti)
 		})
 	}
 }

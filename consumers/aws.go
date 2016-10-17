@@ -2,6 +2,8 @@ package consumers
 
 import "github.bus.zalan.do/teapot/mate/pkg"
 
+// Implementations provide access to AWS Route53 API's
+// required calls.
 type AwsClient interface {
 	ListRecordSets() ([]*pkg.Endpoint, error)
 	ChangeRecordSets(upsert, del []*pkg.Endpoint) error
@@ -11,7 +13,9 @@ type aws struct {
 	client AwsClient
 }
 
-func NewAws(c AwsClient) Consumer {
+// NewAWS reates a Consumer instance to sync and process DNS
+// entries in AWS Route53.
+func NewAWS(c AwsClient) Consumer {
 	return &aws{c}
 }
 

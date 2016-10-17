@@ -17,6 +17,10 @@ type Consumer interface {
 	Process(*pkg.Endpoint) error
 }
 
+// Returns a synced Consumer implementation.
+//
+// TODO: consider whether this syncing is necessary,
+// and just drop if not.
 func New(name string) (Consumer, error) {
 	switch name {
 	case "google":
@@ -24,13 +28,13 @@ func New(name string) (Consumer, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Error creating Google DNS consumer: %v", err)
 		}
-		return c, nil
+		return syncedConsumer(c), nil
 	case "stdout":
 		c, err := NewStdout()
 		if err != nil {
 			return nil, fmt.Errorf("Error creating Stdout consumer: %v", err)
 		}
-		return c, nil
+		return syncedConsumer(c), nil
 	}
 	return nil, fmt.Errorf("Unknown consumer '%s'.", name)
 }
