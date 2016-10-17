@@ -7,10 +7,10 @@ import (
 )
 
 type Client struct {
-	Records      map[string]string
+	Records    map[string]string
 	LastUpsert []*pkg.Endpoint
 	LastDelete []*pkg.Endpoint
-	failNext error
+	failNext   error
 }
 
 func (c *Client) ListRecordSets() ([]*pkg.Endpoint, error) {

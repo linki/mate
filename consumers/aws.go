@@ -1,7 +1,7 @@
 package consumers
 
 import (
-	"github.bus.zalan.do/teapot/mate/consumers/awsclient"
+	"github.bus.zalan.do/teapot/mate/awsclient"
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
 

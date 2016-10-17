@@ -3,7 +3,7 @@ package consumers
 import (
 	"testing"
 
-	"github.bus.zalan.do/teapot/mate/consumers/awsclienttest"
+	"github.bus.zalan.do/teapot/mate/awsclient/awsclienttest"
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
 

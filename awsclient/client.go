@@ -1,17 +1,26 @@
 package awsclient
 
 import (
-	"time"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.bus.zalan.do/teapot/mate/pkg"
+	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 )
+
+const (
+	pathfinderStagingAccountID = "867616033624"
+	pathfinderAccountID        = "325514449488"
+	teapotAccountID            = "170858875137"
+)
+
+const testAccountID = teapotAccountID
 
 const (
 	defaultRole            = "Shibboleth-PowerUser"
@@ -24,13 +33,19 @@ type Logger interface {
 	Infoln(...interface{})
 }
 
+type defaultLog struct{}
+
+func (l defaultLog) Infoln(args ...interface{}) {
+	log.Infoln(args...)
+}
+
 type Options struct {
+	AccountID       string
 	Role            string
 	SessionDuration time.Duration
 	RecordSetTTL    int
 	HostedZone      string
 	Log             Logger
-	AccountID       string
 }
 
 type Client struct {
@@ -52,26 +67,13 @@ func New(o Options) *Client {
 		o.RecordSetTTL = defaultTTL
 	}
 
+	if o.Log == nil {
+		o.Log = defaultLog{}
+	}
+
+	o.AccountID = testAccountID
+
 	return &Client{o}
-}
-
-func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
-	client, err := c.initClient()
-	if err != nil {
-		return err
-	}
-
-	var changes []*route53.Change
-	changes = append(changes, c.mapEndpoints("UPSERT", upsert)...)
-	changes = append(changes, c.mapEndpoints("DELETE", del)...)
-
-	changeSet := &route53.ChangeResourceRecordSetsInput{
-		ChangeBatch:  &route53.ChangeBatch{Changes: changes},
-		HostedZoneId: aws.String(c.options.HostedZone),
-	}
-
-	_, err = client.ChangeResourceRecordSets(changeSet)
-	return err
 }
 
 func (c *Client) ListRecordSets() ([]*pkg.Endpoint, error) {
@@ -106,6 +108,33 @@ func (c *Client) ListRecordSets() ([]*pkg.Endpoint, error) {
 	return mapRecordSets(rsp.ResourceRecordSets), nil
 }
 
+func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
+	client, err := c.initClient()
+	if err != nil {
+		return err
+	}
+
+	zoneID, err := c.getZoneID(client)
+	if err != nil {
+		return err
+	}
+
+	var changes []*route53.Change
+	changes = append(changes, c.mapEndpoints("UPSERT", upsert)...)
+	changes = append(changes, c.mapEndpoints("DELETE", del)...)
+	if len(changes) == 0 {
+		return nil
+	}
+
+	changeSet := &route53.ChangeResourceRecordSetsInput{
+		ChangeBatch:  &route53.ChangeBatch{Changes: changes},
+		HostedZoneId: zoneID,
+	}
+
+	_, err = client.ChangeResourceRecordSets(changeSet)
+	return err
+}
+
 func (c *Client) initClient() (*route53.Route53, error) {
 	// TODO:
 	// - is the parent session really needed, or can it be simplified
@@ -135,9 +164,61 @@ func (c *Client) initClient() (*route53.Route53, error) {
 		WithCredentials(credentials).
 		WithLogger(aws.LoggerFunc(c.options.Log.Infoln))
 	session, err := session.NewSession(cfg)
-	return nil, err
+	if err != nil {
+		return nil, err
+	}
 
 	return route53.New(session), nil
+}
+
+func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
+	// TODO: handle when not all hosted zones fit in the response
+	zonesResult, err := ac.ListHostedZones(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if zonesResult == nil {
+		return nil, ErrInvalidAWSResponse
+	}
+
+	zoneName := hostedZoneSuffix(c.options.HostedZone)
+
+	var zoneID *string
+	for _, z := range zonesResult.HostedZones {
+		if aws.StringValue(z.Name) == zoneName {
+			zoneID = z.Id
+			break
+		}
+	}
+
+	return zoneID, nil
+}
+
+func hostedZoneSuffix(name string) string {
+	if !strings.HasSuffix(name, ".") {
+		return name + "."
+	}
+
+	return name
+}
+
+func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
+	var endpoints []*pkg.Endpoint
+	for _, s := range sets {
+		if aws.StringValue(s.Type) != "A" {
+			continue
+		}
+
+		var ip string
+		for _, r := range s.ResourceRecords {
+			ip = aws.StringValue(r.Value)
+		}
+
+		endpoints = append(endpoints, &pkg.Endpoint{DNSName: aws.StringValue(s.Name), IP: ip})
+	}
+
+	return endpoints
 }
 
 func (c *Client) mapEndpoint(ep *pkg.Endpoint) *route53.ResourceRecordSet {
@@ -162,49 +243,4 @@ func (c *Client) mapEndpoints(action string, endpoints []*pkg.Endpoint) []*route
 	}
 
 	return changes
-}
-
-func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
-	// TODO: handle when not all hosted zones fit in the response
-	zonesResult, err := ac.ListHostedZones(nil);
-	if err != nil {
-		return nil, err
-	}
-
-	if zonesResult == nil {
-		return nil, ErrInvalidAWSResponse
-	}
-
-	zoneName := c.options.HostedZone
-	if !strings.HasSuffix(zoneName, ".") {
-		zoneName += "."
-	}
-
-	var zoneID *string
-	for _, z := range zonesResult.HostedZones {
-		if aws.StringValue(z.Name) == zoneName {
-			zoneID = z.Id
-			break
-		}
-	}
-
-	return zoneID, nil
-}
-
-func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
-	var endpoints []*pkg.Endpoint
-	for _, s := range sets {
-		if aws.StringValue(s.Type) != "A" {
-			continue
-		}
-
-		var ip string
-		for _, r := range s.ResourceRecords {
-			ip = aws.StringValue(r.Value)
-		}
-
-		endpoints = append(endpoints, &pkg.Endpoint{DNSName: aws.StringValue(s.Name), IP: ip})
-	}
-
-	return endpoints
 }
