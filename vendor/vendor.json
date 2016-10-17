@@ -51,30 +51,6 @@
 			"revision": "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a"
 		},
 		{
-			"checksumSHA1": "nGJsEKW1/7cQKGlYCuX3XwUhUmM=",
-			"path": "github.com/aws/aws-sdk-go/aws",
-			"revision": "1b2abe886743dc2bcc78472bfd30a15dc0a61fb8",
-			"revisionTime": "2016-10-13T20:17:12Z"
-		},
-		{
-			"checksumSHA1": "4Ipx+5xN0gso+cENC2MHMWmQlR4=",
-			"path": "github.com/aws/aws-sdk-go/aws/credentials/stscreds",
-			"revision": "1b2abe886743dc2bcc78472bfd30a15dc0a61fb8",
-			"revisionTime": "2016-10-13T20:17:12Z"
-		},
-		{
-			"checksumSHA1": "AFcUmKIbqHEKLdNMYB8ubtT+FHA=",
-			"path": "github.com/aws/aws-sdk-go/aws/session",
-			"revision": "1b2abe886743dc2bcc78472bfd30a15dc0a61fb8",
-			"revisionTime": "2016-10-13T20:17:12Z"
-		},
-		{
-			"checksumSHA1": "H2DlzddrhenFeCOQH9ssYPcFePQ=",
-			"path": "github.com/aws/aws-sdk-go/service/route53",
-			"revision": "1b2abe886743dc2bcc78472bfd30a15dc0a61fb8",
-			"revisionTime": "2016-10-13T20:17:12Z"
-		},
-		{
 			"checksumSHA1": "4QnLdmB1kG3N+KlDd1N+G9TWAGQ=",
 			"path": "github.com/beorn7/perks/quantile",
 			"revision": "3ac7bf7a47d159a033b107610db8a1b6575507a4"
