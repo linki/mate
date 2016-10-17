@@ -396,6 +396,12 @@
 			"revision": "e8e0db9016175449df0e9c4b6e6995a9433a395c"
 		},
 		{
+			"checksumSHA1": "cVyhKIRI2gQrgpn5qrBeAqErmWM=",
+			"path": "github.com/go-ini/ini",
+			"revision": "6e4869b434bd001f6983749881c7ead3545887d8",
+			"revisionTime": "2016-08-27T06:11:18Z"
+		},
+		{
 			"checksumSHA1": "iZVulPMFFGC70xeLZJafiKzTn18=",
 			"comment": "v0.2-17-gc18eea6",
 			"path": "github.com/gogo/protobuf/proto",
@@ -476,6 +482,12 @@
 			"path": "github.com/inconshreveable/mousetrap",
 			"revision": "b77f20324d1ba66b7376f87aac21c4a6dbe9c3c8",
 			"revisionTime": "2016-09-06T19:28:48Z"
+		},
+		{
+			"checksumSHA1": "0ZrwvB6KoGPj2PoDNSEJwxQ6Mog=",
+			"path": "github.com/jmespath/go-jmespath",
+			"revision": "bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d",
+			"revisionTime": "2016-08-03T19:07:31Z"
 		},
 		{
 			"checksumSHA1": "7BbrBEIA6vmz+3G4H/DJ8IoGB1M=",
