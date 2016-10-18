@@ -142,7 +142,6 @@ func (c *Client) initClient() (*route53.Route53, error) {
 		"arn:aws:iam::"+c.options.AccountID+":role/"+c.options.Role,
 		func(provider *stscreds.AssumeRoleProvider) {
 			provider.Duration = c.options.SessionDuration
-			provider.RoleSessionName = "odd-updater@" + c.options.AccountID
 		})
 	cfg := aws.NewConfig().
 		WithCredentialsChainVerboseErrors(true).
