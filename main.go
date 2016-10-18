@@ -26,7 +26,6 @@ var params struct {
 	awsAccountID       string
 	awsRole            string
 	awsHostedZone      string
-	awsSessionDuration time.Duration
 	awsTTL             int
 	interval           time.Duration
 	once               bool
@@ -41,7 +40,6 @@ func init() {
 	kingpin.Flag("aws-account", "The ID of the AWS account to be used with the AWS consumer (required with AWS).").StringVar(&params.awsAccountID)
 	kingpin.Flag("aws-role", "The AWS role to be used with the AWS consumer (required with AWS).").StringVar(&params.awsRole)
 	kingpin.Flag("aws-hosted-zone", "The hosted zone name for the AWS consumer (required with AWS).").StringVar(&params.awsHostedZone)
-	kingpin.Flag("aws-session-duration", "The AWS session duration for the AWS consumer.").DurationVar(&params.awsSessionDuration)
 	kingpin.Flag("aws-record-set-ttl", "TTL for the record sets created by the AWS consumer.").IntVar(&params.awsTTL)
 	kingpin.Flag("interval", "Interval in Duration format, e.g. 60s.").Short('i').Default(defaultInterval.String()).DurationVar(&params.interval)
 	kingpin.Flag("once", "Run once and exit").BoolVar(&params.once)
@@ -69,7 +67,6 @@ func main() {
 			AccountID:       params.awsAccountID,
 			Role:            params.awsRole,
 			HostedZone:      params.awsHostedZone,
-			SessionDuration: params.awsSessionDuration,
 			RecordSetTTL:    params.awsTTL,
 		},
 	})

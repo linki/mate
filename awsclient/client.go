@@ -9,7 +9,6 @@ import (
 	"github.bus.zalan.do/teapot/mate/pkg"
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 )
@@ -34,7 +33,6 @@ type Options struct {
 	AccountID       string
 	Role            string
 	HostedZone      string
-	SessionDuration time.Duration
 	RecordSetTTL    int
 	Log             Logger
 }
@@ -46,10 +44,6 @@ type Client struct {
 var ErrInvalidAWSResponse = errors.New("invalid AWS response")
 
 func New(o Options) *Client {
-	if o.SessionDuration <= 0 {
-		o.SessionDuration = defaultSessionDuration
-	}
-
 	if o.RecordSetTTL <= 0 {
 		o.RecordSetTTL = defaultTTL
 	}
@@ -121,33 +115,13 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 }
 
 func (c *Client) initClient() (*route53.Route53, error) {
-	// TODO:
-	// - is the parent session really needed, or can it be simplified
-	// - try to reuse based on the session duration, or, if the error
-	// can be identified, refreshing on auth errors only
-
-	parentSession, err := session.NewSessionWithOptions(session.Options{
+	session, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 		Config: aws.Config{
 			Logger: aws.LoggerFunc(c.options.Log.Infoln),
 			CredentialsChainVerboseErrors: aws.Bool(true),
 		},
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	credentials := stscreds.NewCredentials(
-		parentSession,
-		"arn:aws:iam::"+c.options.AccountID+":role/"+c.options.Role,
-		func(provider *stscreds.AssumeRoleProvider) {
-			provider.Duration = c.options.SessionDuration
-		})
-	cfg := aws.NewConfig().
-		WithCredentialsChainVerboseErrors(true).
-		WithCredentials(credentials).
-		WithLogger(aws.LoggerFunc(c.options.Log.Infoln))
-	session, err := session.NewSession(cfg)
 	if err != nil {
 		return nil, err
 	}
