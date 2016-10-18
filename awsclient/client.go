@@ -30,11 +30,9 @@ func (l defaultLog) Infoln(args ...interface{}) {
 }
 
 type Options struct {
-	AccountID       string
-	Role            string
-	HostedZone      string
-	RecordSetTTL    int
-	Log             Logger
+	HostedZone   string
+	RecordSetTTL int
+	Log          Logger
 }
 
 type Client struct {

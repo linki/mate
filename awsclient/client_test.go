@@ -11,8 +11,6 @@ import (
 const (
 	awsProviderVarName   = "AWS_PROVIDER_TEST"
 	awsHostedZoneVarName = "AWS_HOSTED_ZONE"
-	awsAccountIDVarName  = "AWS_ACCOUNT_ID"
-	awsRoleVarName       = "AWS_ROLE"
 )
 
 func logSets(t *testing.T, sets []*pkg.Endpoint) {
@@ -27,11 +25,7 @@ func TestAWSWithProvider(t *testing.T) {
 	}
 
 	zone := os.Getenv(awsHostedZoneVarName)
-	client := New(Options{
-		AccountID:  os.Getenv(awsAccountIDVarName),
-		Role:       os.Getenv(awsRoleVarName),
-		HostedZone: zone,
-	})
+	client := New(Options{HostedZone: zone})
 
 	sets, err := client.ListRecordSets()
 	if err != nil {

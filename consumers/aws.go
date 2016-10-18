@@ -1,6 +1,10 @@
 package consumers
 
 import (
+	"errors"
+
+	"gopkg.in/alecthomas/kingpin.v2"
+
 	"github.bus.zalan.do/teapot/mate/awsclient"
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
@@ -16,13 +20,25 @@ type aws struct {
 	client AWSClient
 }
 
+func init() {
+	kingpin.Flag("aws-hosted-zone", "The hosted zone name for the AWS consumer (required with AWS).").StringVar(&params.awsHostedZone)
+	kingpin.Flag("aws-record-set-ttl", "TTL for the record sets created by the AWS consumer.").IntVar(&params.awsTTL)
+}
+
 // NewAWS reates a Consumer instance to sync and process DNS
 // entries in AWS Route53.
-func NewAWS(c AWSClient) Consumer {
-	if c == nil {
-		c = awsclient.New(awsclient.Options{})
+func NewAWSRoute53() (Consumer, error) {
+	if params.awsHostedZone == "" {
+		return nil, errors.New("please provide --aws-hosted-zone")
 	}
 
+	return withClient(awsclient.New(awsclient.Options{
+		HostedZone:   params.awsHostedZone,
+		RecordSetTTL: params.awsTTL,
+	})), nil
+}
+
+func withClient(c AWSClient) *aws {
 	return &aws{c}
 }
 

@@ -3,20 +3,17 @@ package consumers
 import (
 	"fmt"
 
-	"github.bus.zalan.do/teapot/mate/awsclient"
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
 
 var params struct {
-	domain  string
-	project string
-	zone    string
-}
-
-// Options are used to initialize a Consumer.
-type Options struct {
-	Name       string
-	AWSOptions awsclient.Options
+	domain        string
+	project       string
+	zone          string
+	awsAccountID  string
+	awsRole       string
+	awsHostedZone string
+	awsTTL        int
 }
 
 type Consumer interface {
@@ -30,23 +27,20 @@ type Consumer interface {
 // and just drop if not. Usually, it is better to
 // care about syncing in a single place, optimally
 // on the caller side.
-func New(o Options) (Consumer, error) {
-	var (
-		c   Consumer
-		err error
-	)
-
-	switch o.Name {
+func New(name string) (Consumer, error) {
+	var create func() (Consumer, error)
+	switch name {
 	case "google":
-		c, err = NewGoogleDNS()
+		create = NewGoogleDNS
 	case "aws":
-		c = NewAWS(awsclient.New(o.AWSOptions))
+		create = NewAWSRoute53
 	case "stdout":
-		c, err = NewStdout()
+		create = NewStdout
 	default:
-		return nil, fmt.Errorf("Unknown consumer '%s'.", o.Name)
+		return nil, fmt.Errorf("Unknown consumer '%s'.", name)
 	}
 
+	c, err := create()
 	if err != nil {
 		return nil, fmt.Errorf("error creating Google DNS consumer: %v", err)
 	}

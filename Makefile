@@ -24,8 +24,6 @@ test:
 test-with-aws:
 	AWS_PROVIDER_TEST=true \
 	AWS_HOSTED_ZONE=mate.teapot.zalan.do \
-	AWS_ACCOUNT_ID=170858875137 \
-	AWS_ROLE=Shibboleth-PowerUser \
 	go test -v $(GOPKGS)
 
 fmt:

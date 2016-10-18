@@ -64,7 +64,7 @@ func testAWSConsumer(t *testing.T, ti awsTestItem) {
 		client.Records = make(map[string]string)
 	}
 
-	consumer := NewAWS(client)
+	consumer := withClient(client)
 
 	if ti.process == nil {
 		err := consumer.Sync(ti.sync)
