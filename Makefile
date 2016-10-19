@@ -21,6 +21,14 @@ clean:
 test:
 	go test -v $(GOPKGS)
 
+test-with-aws:
+	AWS_PROVIDER_TEST=true \
+	AWS_HOSTED_ZONE=mate.teapot.zalan.do \
+	go test -v $(GOPKGS)
+
+fmt:
+	go fmt $(GOPKGS)
+
 check:
 	golint $(GOPKGS)
 	go vet -v $(GOPKGS)

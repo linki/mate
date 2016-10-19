@@ -7,9 +7,13 @@ import (
 )
 
 var params struct {
-	domain  string
-	project string
-	zone    string
+	domain        string
+	project       string
+	zone          string
+	awsAccountID  string
+	awsRole       string
+	awsHostedZone string
+	awsTTL        int
 }
 
 type Consumer interface {
@@ -17,20 +21,29 @@ type Consumer interface {
 	Process(*pkg.Endpoint) error
 }
 
+// Returns a synced Consumer implementation.
+//
+// TODO: consider whether the syncing is necessary,
+// and just drop if not. Usually, it is better to
+// care about syncing in a single place, optimally
+// on the caller side.
 func New(name string) (Consumer, error) {
+	var create func() (Consumer, error)
 	switch name {
 	case "google":
-		c, err := NewGoogleDNS()
-		if err != nil {
-			return nil, fmt.Errorf("Error creating Google DNS consumer: %v", err)
-		}
-		return c, nil
+		create = NewGoogleDNS
+	case "aws":
+		create = NewAWSRoute53
 	case "stdout":
-		c, err := NewStdout()
-		if err != nil {
-			return nil, fmt.Errorf("Error creating Stdout consumer: %v", err)
-		}
-		return c, nil
+		create = NewStdout
+	default:
+		return nil, fmt.Errorf("Unknown consumer '%s'.", name)
 	}
-	return nil, fmt.Errorf("Unknown consumer '%s'.", name)
+
+	c, err := create()
+	if err != nil {
+		return nil, fmt.Errorf("error creating Google DNS consumer: %v", err)
+	}
+
+	return syncedConsumer(c), nil
 }

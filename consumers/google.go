@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.bus.zalan.do/teapot/mate/pkg"
 
@@ -17,7 +16,6 @@ import (
 
 type googleDNSConsumer struct {
 	client *dns.Service
-	sync.Mutex
 }
 
 func init() {
@@ -26,7 +24,7 @@ func init() {
 	kingpin.Flag("google-zone", "Name of the zone to manage.").StringVar(&params.zone)
 }
 
-func NewGoogleDNS() (*googleDNSConsumer, error) {
+func NewGoogleDNS() (Consumer, error) {
 	if params.zone == "" {
 		return nil, errors.New("Please provide --gcloud-zone")
 	}
@@ -56,9 +54,6 @@ func NewGoogleDNS() (*googleDNSConsumer, error) {
 }
 
 func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
-	d.Lock()
-	defer d.Unlock()
-
 	records, err := d.currentRecords()
 	if err != nil {
 		return err
@@ -96,9 +91,6 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 }
 
 func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {
-	d.Lock()
-	defer d.Unlock()
-
 	change := new(dns.Change)
 
 	change.Additions = []*dns.ResourceRecordSet{
