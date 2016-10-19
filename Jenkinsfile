@@ -1,5 +1,6 @@
 go {
     go.run("make build.linux")
+    go.run("make test")
 
     // Push to pierone
     if ("master".equals(env.BRANCH_NAME)) {
