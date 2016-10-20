@@ -76,7 +76,7 @@ func (a *aws) Process(endpoint *pkg.Endpoint) error {
 func needsUpsert(ep *pkg.Endpoint, currentEndpoints []*pkg.Endpoint) bool {
 	for _, cep := range currentEndpoints {
 		if cep.DNSName == ep.DNSName {
-			return cep.IP != ep.IP
+			return cep.IP != ep.IP || cep.Hostname != ep.Hostname
 		}
 	}
 

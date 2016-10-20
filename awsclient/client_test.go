@@ -15,7 +15,7 @@ const (
 
 func logSets(t *testing.T, sets []*pkg.Endpoint) {
 	for _, s := range sets {
-		t.Log(s.DNSName, s.IP)
+		t.Log(s.DNSName, "-", s.IP, "-", s.Hostname)
 	}
 }
 
@@ -95,5 +95,89 @@ func TestAWSWithProvider(t *testing.T) {
 			t.Error(checkMessage)
 			return
 		}
+	}
+}
+
+func TestAWSAliasWithProvider(t *testing.T) {
+	// TODO: figure how to test this
+	t.Skip()
+
+	if os.Getenv(awsProviderVarName) != "true" {
+		t.Skip()
+	}
+
+	zone := os.Getenv(awsHostedZoneVarName)
+	client := New(Options{HostedZone: zone})
+
+	sets, err := client.ListRecordSets()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	t.Log("found initially:")
+	logSets(t, sets)
+
+	var hasTestLB bool
+	for _, ep := range sets {
+		if ep.DNSName == "test-kube-lb.mate.teapot.zalan.do" {
+			hasTestLB = true
+			break
+		}
+	}
+
+	testLB := []*pkg.Endpoint{{
+		DNSName:  "test-kube-lb.mate.teapot.zalan.do",
+		Hostname: "kube-lb-1915115900.eu-central-1.elb.amazonaws.com",
+	}}
+
+	if hasTestLB {
+		t.Log("deleting test lb record")
+		if err := client.ChangeRecordSets(nil, testLB); err != nil {
+			t.Error(err)
+			return
+		}
+	}
+
+	sets, err = client.ListRecordSets()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	hasTestLB = false
+	for _, ep := range sets {
+		if ep.DNSName == "test-kube-lb.mate.teapot.zalan.do" {
+			hasTestLB = true
+			break
+		}
+	}
+	if hasTestLB {
+		t.Error("failed to delete sets")
+		return
+	}
+
+	t.Log("creating record sets:")
+	logSets(t, testLB)
+	if err := client.ChangeRecordSets(testLB, nil); err != nil {
+		t.Error(err)
+		return
+	}
+
+	setsCheck, err := client.ListRecordSets()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	hasTestLB = false
+	for _, ep := range setsCheck {
+		if ep.DNSName == "test-kube-lb.mate.teapot.zalan.do" {
+			hasTestLB = true
+			break
+		}
+	}
+	if !hasTestLB {
+		t.Error("failed to return test LB")
 	}
 }

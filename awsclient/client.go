@@ -97,8 +97,8 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	}
 
 	var changes []*route53.Change
-	changes = append(changes, c.mapEndpoints("UPSERT", upsert)...)
-	changes = append(changes, c.mapEndpoints("DELETE", del)...)
+	changes = append(changes, c.mapEndpoints("UPSERT", upsert, zoneID)...)
+	changes = append(changes, c.mapEndpoints("DELETE", del, zoneID)...)
 	if len(changes) == 0 {
 		return nil
 	}
@@ -151,6 +151,17 @@ func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
 	return zoneID, nil
 }
 
+func cleanHostedZoneID(zoneID *string) *string {
+	v := *zoneID
+	qualifierLength := strings.LastIndex(v, "/")
+	if qualifierLength < 0 {
+		return &v
+	}
+
+	v = v[qualifierLength+1:]
+	return &v
+}
+
 func hostedZoneSuffix(name string) string {
 	if !strings.HasSuffix(name, ".") {
 		return name + "."
@@ -166,35 +177,59 @@ func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
 			continue
 		}
 
-		var ip string
-		for _, r := range s.ResourceRecords {
-			ip = aws.StringValue(r.Value)
+		var ip, hostname string
+		if s.AliasTarget != nil {
+			hostname = aws.StringValue(s.AliasTarget.DNSName)
+		} else {
+			for _, r := range s.ResourceRecords {
+				ip = aws.StringValue(r.Value)
+				break
+			}
 		}
 
-		endpoints = append(endpoints, &pkg.Endpoint{DNSName: aws.StringValue(s.Name), IP: ip})
+		endpoints = append(endpoints, &pkg.Endpoint{
+			DNSName:  aws.StringValue(s.Name),
+			IP:       ip,
+			Hostname: hostname,
+		})
 	}
 
 	return endpoints
 }
 
-func (c *Client) mapEndpoint(ep *pkg.Endpoint) *route53.ResourceRecordSet {
+func (c *Client) mapEndpoint(ep *pkg.Endpoint, aliasHostedZoneId *string) *route53.ResourceRecordSet {
 	ttl := int64(c.options.RecordSetTTL)
-	return &route53.ResourceRecordSet{
-		Name: aws.String(ep.DNSName),
+	vfalse := false
+	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
-		ResourceRecords: []*route53.ResourceRecord{{
-			Value: aws.String(ep.IP),
-		}},
-		TTL: &ttl,
+		Name: aws.String(ep.DNSName),
 	}
+
+	if ep.IP != "" {
+		rs.TTL = &ttl
+		rs.ResourceRecords = []*route53.ResourceRecord{{
+			Value: aws.String(ep.IP),
+		}}
+	} else {
+		rs.AliasTarget = &route53.AliasTarget{
+			DNSName:              aws.String(ep.Hostname),
+			HostedZoneId:         cleanHostedZoneID(aliasHostedZoneId),
+			EvaluateTargetHealth: &vfalse,
+		}
+	}
+
+	return rs
 }
 
-func (c *Client) mapEndpoints(action string, endpoints []*pkg.Endpoint) []*route53.Change {
+// AWS alias records have a required field expecting the hosted zone id.
+// Tested only with the AWS Console, aliases to load balancers don't work
+// across hosted zones, but API expects this field, so let them have it.
+func (c *Client) mapEndpoints(action string, endpoints []*pkg.Endpoint, aliasHostedZoneId *string) []*route53.Change {
 	var changes []*route53.Change
 	for _, ep := range endpoints {
 		changes = append(changes, &route53.Change{
 			Action:            aws.String(action),
-			ResourceRecordSet: c.mapEndpoint(ep),
+			ResourceRecordSet: c.mapEndpoint(ep, aliasHostedZoneId),
 		})
 	}
 
