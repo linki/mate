@@ -11,6 +11,14 @@ import (
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
 
+type endpointDefType int
+
+const (
+	none  endpointDefType = 0
+	ipDef endpointDefType = 1 << iota
+	hostnameDef
+)
+
 type fakeProducer struct {
 	channel chan *pkg.Endpoint
 }
@@ -32,16 +40,7 @@ func (a *fakeProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	endpoints := make([]*pkg.Endpoint, 0)
 
 	for i := 0; i < 10; i++ {
-		endpoint := &pkg.Endpoint{
-			DNSName: fmt.Sprintf("%s.%s", randomString(2), params.dnsName),
-			IP: net.IPv4(
-				byte(randomNumber(1, 255)),
-				byte(randomNumber(1, 255)),
-				byte(randomNumber(1, 255)),
-				byte(randomNumber(1, 255)),
-			).String(),
-		}
-		endpoints = append(endpoints, endpoint)
+		endpoints = append(endpoints, genEndpoint())
 	}
 
 	return endpoints, nil
@@ -49,16 +48,7 @@ func (a *fakeProducer) Endpoints() ([]*pkg.Endpoint, error) {
 
 func (a *fakeProducer) StartWatch() error {
 	for {
-		a.channel <- &pkg.Endpoint{
-			DNSName: fmt.Sprintf("%s.%s", randomString(2), params.dnsName),
-			IP: net.IPv4(
-				byte(randomNumber(1, 255)),
-				byte(randomNumber(1, 255)),
-				byte(randomNumber(1, 255)),
-				byte(randomNumber(1, 255)),
-			).String(),
-		}
-
+		a.channel <- genEndpoint()
 		time.Sleep(5 * time.Second)
 	}
 
@@ -81,4 +71,42 @@ func randomString(n int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
+}
+
+func rollEndpointDef() endpointDefType {
+	return endpointDefType(rand.Intn(int(ipDef|hostnameDef) + 1))
+}
+
+func (epd endpointDefType) hasIP() bool {
+	return epd&ipDef != 0
+}
+
+func (epd endpointDefType) hasHostname() bool {
+	return epd&hostnameDef != 0
+}
+
+func genHostname() string {
+	return fmt.Sprintf("%s.%s", randomString(6), randomString(6))
+}
+
+func genEndpoint() *pkg.Endpoint {
+	epd := rollEndpointDef()
+	endpoint := &pkg.Endpoint{
+		DNSName: fmt.Sprintf("%s.%s", randomString(2), params.dnsName),
+	}
+
+	if epd.hasIP() {
+		endpoint.IP = net.IPv4(
+			byte(randomNumber(1, 255)),
+			byte(randomNumber(1, 255)),
+			byte(randomNumber(1, 255)),
+			byte(randomNumber(1, 255)),
+		).String()
+	}
+
+	if epd.hasHostname() {
+		endpoint.Hostname = genHostname()
+	}
+
+	return endpoint
 }

@@ -80,9 +80,14 @@ func (c *Controller) monitorProducer() (chan *pkg.Endpoint, error) {
 	go func() {
 		defer c.wg.Done()
 
-		err := c.producer.StartWatch()
-		if err != nil {
-			log.Fatalln(err)
+		for {
+			err := c.producer.StartWatch()
+			switch {
+			case err == pkg.ErrEventChannelClosed:
+				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
+			case err != nil:
+				log.Fatalln(err)
+			}
 		}
 	}()
 

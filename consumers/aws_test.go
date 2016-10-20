@@ -93,14 +93,14 @@ func TestAWSConsumer(t *testing.T) {
 	}, {
 		msg: "no initial, sync new ones",
 		sync: []*pkg.Endpoint{{
-			"foo.org", "1.2.3.4",
+			"foo.org", "1.2.3.4", "",
 		}, {
-			"bar.org", "5.6.7.8",
+			"bar.org", "5.6.7.8", "",
 		}},
 		expectUpsert: []*pkg.Endpoint{{
-			"foo.org", "1.2.3.4",
+			"foo.org", "1.2.3.4", "",
 		}, {
-			"bar.org", "5.6.7.8",
+			"bar.org", "5.6.7.8", "",
 		}},
 	}, {
 		msg: "sync delete all",
@@ -109,9 +109,9 @@ func TestAWSConsumer(t *testing.T) {
 			"bar.org": "5.6.7.8",
 		},
 		expectDelete: []*pkg.Endpoint{{
-			"foo.org", "1.2.3.4",
+			"foo.org", "1.2.3.4", "",
 		}, {
-			"bar.org", "5.6.7.8",
+			"bar.org", "5.6.7.8", "",
 		}},
 	}, {
 		msg: "insert, update, delete, leave",
@@ -121,19 +121,19 @@ func TestAWSConsumer(t *testing.T) {
 			"baz.org": "9.0.1.2",
 		},
 		sync: []*pkg.Endpoint{{
-			"qux.org", "4.5.6.7",
+			"qux.org", "4.5.6.7", "",
 		}, {
-			"foo.org", "8.9.0.1",
+			"foo.org", "8.9.0.1", "",
 		}, {
-			"baz.org", "9.0.1.2",
+			"baz.org", "9.0.1.2", "",
 		}},
 		expectUpsert: []*pkg.Endpoint{{
-			"qux.org", "4.5.6.7",
+			"qux.org", "4.5.6.7", "",
 		}, {
-			"foo.org", "8.9.0.1",
+			"foo.org", "8.9.0.1", "",
 		}},
 		expectDelete: []*pkg.Endpoint{{
-			"bar.org", "5.6.7.8",
+			"bar.org", "5.6.7.8", "",
 		}},
 	}, {
 		msg: "fail on list",
@@ -142,7 +142,7 @@ func TestAWSConsumer(t *testing.T) {
 			"bar.org": "5.6.7.8",
 		},
 		sync: []*pkg.Endpoint{{
-			"baz.org", "9.0.1.2",
+			"baz.org", "9.0.1.2", "",
 		}},
 		fail:       true,
 		expectFail: true,
@@ -153,7 +153,7 @@ func TestAWSConsumer(t *testing.T) {
 			"bar.org": "5.6.7.8",
 		},
 		sync: []*pkg.Endpoint{{
-			"baz.org", "9.0.1.2",
+			"baz.org", "9.0.1.2", "",
 		}},
 		fail:       true,
 		expectFail: true,

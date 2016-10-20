@@ -55,52 +55,71 @@ func NewKubernetes() (*kubernetesProducer, error) {
 	}, nil
 }
 
+func isGoodService(svc api.Service) (good bool, whyNot string) {
+	switch {
+	case len(svc.Status.LoadBalancer.Ingress) == 0:
+		whyNot = fmt.Sprintf(
+			"The load balancer of service '%s/%s' does not have any ingress.",
+			svc.Namespace, svc.Name,
+		)
+	case len(svc.Status.LoadBalancer.Ingress) > 1:
+		whyNot = fmt.Sprintf(
+			"Cannot register service '%s/%s'. More than one ingress is not supported",
+			svc.Namespace, svc.Name,
+		)
+	default:
+		good = true
+	}
+
+	return
+}
+
+func (a *kubernetesProducer) mapService(svc api.Service) (*pkg.Endpoint, error) {
+	var buf bytes.Buffer
+	if err := a.tmpl.Execute(&buf, svc); err != nil {
+		return nil, fmt.Errorf("Error applying template: %s", err)
+	}
+
+	ep := &pkg.Endpoint{DNSName: fmt.Sprintf("%s.%s", buf.String(), params.domain)}
+	for _, i := range svc.Status.LoadBalancer.Ingress {
+		if ep.IP != "" && ep.Hostname != "" {
+			break
+		}
+
+		if i.IP != "" {
+			ep.IP = i.IP
+		}
+
+		if i.Hostname != "" {
+			ep.Hostname = i.Hostname
+		}
+	}
+
+	return ep, nil
+}
+
 func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
-	allServices, err := a.client.Services(api.NamespaceAll).List(api.ListOptions{
-	// better to filter by services that have external IPs here
-	// FieldSelector: fields.OneTermEqualSelector("external ip", "exists"),
-	})
+	allServices, err := a.client.Services(api.NamespaceAll).List(api.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve list of services: %v", err)
 	}
 
-	services := make([]api.Service, 0, len(allServices.Items))
-
-	for _, svc := range allServices.Items {
-		if len(svc.Status.LoadBalancer.Ingress) == 1 {
-			services = append(services, svc)
-		}
-
-		// TODO: support multiple IPs
-		if len(svc.Status.LoadBalancer.Ingress) > 1 {
-			log.Warnf("Cannot register service '%s/%s'. More than one ingress is not supported",
-				svc.Namespace, svc.Name)
-		}
-	}
-
 	log.Debugln("Current services and their endpoints:")
 	log.Debugln("=====================================")
-	for _, svc := range services {
-		log.Debugln(svc.Name, svc.Namespace, svc.Status.LoadBalancer.Ingress[0])
-	}
+	ret := make([]*pkg.Endpoint, 0, len(allServices.Items))
+	for _, svc := range allServices.Items {
+		if good, whyNot := isGoodService(svc); !good {
+			log.Warnln(whyNot)
+			continue
+		}
 
-	ret := make([]*pkg.Endpoint, 0, len(services))
-
-	for _, svc := range services {
-		var buf bytes.Buffer
-
-		err = a.tmpl.Execute(&buf, svc)
+		ep, err := a.mapService(svc)
 		if err != nil {
-			return nil, fmt.Errorf("Error applying template: %s", err)
+			// TODO: consider allowing the service continue running and just log this error
+			return nil, err
 		}
 
-		endpoint := &pkg.Endpoint{
-			DNSName: fmt.Sprintf("%s.%s", buf.String(), params.domain),
-			// TODO: allow multiple IPs
-			IP: svc.Status.LoadBalancer.Ingress[0].IP,
-		}
-
-		ret = append(ret, endpoint)
+		ret = append(ret, ep)
 	}
 
 	return ret, nil
@@ -112,58 +131,40 @@ func (a *kubernetesProducer) StartWatch() error {
 		return fmt.Errorf("Unable to watch list of services: %v", err)
 	}
 
-	events := w.ResultChan()
-
-	for {
-		event, ok := <-events
-		if !ok {
-			// The channel closes regularly in which case we restart the watch
-			return fmt.Errorf("Unable to read from channel. Channel was closed. Trying to restart watch...")
-
-		}
-		if event.Type == watch.Added || event.Type == watch.Modified {
-			svc, ok := event.Object.(*api.Service)
-			if !ok {
-				// If the object wasn't a Service we can safely ignore it
-				log.Printf("Cannot cast object to service: %v", svc)
-				continue
-			}
-
-			log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
-
-			if len(svc.Status.LoadBalancer.Ingress) > 1 {
-				// Print a warning about the ignored service, no need to crash here
-				log.Printf("Cannot register service '%s/%s'. More than one ingress is not supported",
-					svc.Namespace, svc.Name)
-				continue
-			}
-
-			if len(svc.Status.LoadBalancer.Ingress) == 1 {
-				var buf bytes.Buffer
-
-				err = a.tmpl.Execute(&buf, svc)
-				if err != nil {
-					return fmt.Errorf("Error applying template: %s", err)
-				}
-
-				a.channel <- &pkg.Endpoint{
-					DNSName: fmt.Sprintf("%s.%s", buf.String(), params.domain),
-					// allow multiple IPs
-					IP: svc.Status.LoadBalancer.Ingress[0].IP,
-				}
-			}
-		}
-
-		if event.Type == watch.Deleted {
-			// can be ignored due to sync
-		}
-
+	for event := range w.ResultChan() {
 		if event.Type == watch.Error {
+			// TODO: consider allowing the service continue running and just log this error
 			return fmt.Errorf("Event listener received an error, terminating: %v", event)
 		}
+
+		if event.Type != watch.Added && event.Type != watch.Modified {
+			continue
+		}
+
+		svc, ok := event.Object.(*api.Service)
+		if !ok {
+			// If the object wasn't a Service we can safely ignore it
+			log.Printf("Cannot cast object to service: %v", svc)
+			continue
+		}
+
+		log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
+
+		if good, whyNot := isGoodService(*svc); !good {
+			log.Println(whyNot)
+			continue
+		}
+
+		ep, err := a.mapService(*svc)
+		if err != nil {
+			// TODO: consider letting the service continue running and just log this error
+			return err
+		}
+
+		a.channel <- ep
 	}
 
-	return nil
+	return pkg.ErrEventChannelClosed
 }
 
 func (a *kubernetesProducer) ResultChan() (chan *pkg.Endpoint, error) {
