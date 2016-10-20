@@ -55,49 +55,6 @@ func NewKubernetes() (*kubernetesProducer, error) {
 	}, nil
 }
 
-func isGoodService(svc api.Service) (good bool, whyNot string) {
-	switch {
-	case len(svc.Status.LoadBalancer.Ingress) == 0:
-		whyNot = fmt.Sprintf(
-			"The load balancer of service '%s/%s' does not have any ingress.",
-			svc.Namespace, svc.Name,
-		)
-	case len(svc.Status.LoadBalancer.Ingress) > 1:
-		whyNot = fmt.Sprintf(
-			"Cannot register service '%s/%s'. More than one ingress is not supported",
-			svc.Namespace, svc.Name,
-		)
-	default:
-		good = true
-	}
-
-	return
-}
-
-func (a *kubernetesProducer) mapService(svc api.Service) (*pkg.Endpoint, error) {
-	var buf bytes.Buffer
-	if err := a.tmpl.Execute(&buf, svc); err != nil {
-		return nil, fmt.Errorf("Error applying template: %s", err)
-	}
-
-	ep := &pkg.Endpoint{DNSName: fmt.Sprintf("%s.%s", buf.String(), params.domain)}
-	for _, i := range svc.Status.LoadBalancer.Ingress {
-		if ep.IP != "" && ep.Hostname != "" {
-			break
-		}
-
-		if i.IP != "" {
-			ep.IP = i.IP
-		}
-
-		if i.Hostname != "" {
-			ep.Hostname = i.Hostname
-		}
-	}
-
-	return ep, nil
-}
-
 func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	allServices, err := a.client.Services(api.NamespaceAll).List(api.ListOptions{})
 	if err != nil {
@@ -169,4 +126,47 @@ func (a *kubernetesProducer) StartWatch() error {
 
 func (a *kubernetesProducer) ResultChan() (chan *pkg.Endpoint, error) {
 	return a.channel, nil
+}
+
+func isGoodService(svc api.Service) (good bool, whyNot string) {
+	switch {
+	case len(svc.Status.LoadBalancer.Ingress) == 0:
+		whyNot = fmt.Sprintf(
+			"The load balancer of service '%s/%s' does not have any ingress.",
+			svc.Namespace, svc.Name,
+		)
+	case len(svc.Status.LoadBalancer.Ingress) > 1:
+		whyNot = fmt.Sprintf(
+			"Cannot register service '%s/%s'. More than one ingress is not supported",
+			svc.Namespace, svc.Name,
+		)
+	default:
+		good = true
+	}
+
+	return
+}
+
+func (a *kubernetesProducer) mapService(svc api.Service) (*pkg.Endpoint, error) {
+	var buf bytes.Buffer
+	if err := a.tmpl.Execute(&buf, svc); err != nil {
+		return nil, fmt.Errorf("Error applying template: %s", err)
+	}
+
+	ep := &pkg.Endpoint{DNSName: fmt.Sprintf("%s.%s", buf.String(), params.domain)}
+	for _, i := range svc.Status.LoadBalancer.Ingress {
+		if ep.IP != "" && ep.Hostname != "" {
+			break
+		}
+
+		if i.IP != "" {
+			ep.IP = i.IP
+		}
+
+		if i.Hostname != "" {
+			ep.Hostname = i.Hostname
+		}
+	}
+
+	return ep, nil
 }
