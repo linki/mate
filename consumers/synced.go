@@ -6,26 +6,30 @@ import (
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
 
-type synced struct {
+type SyncedConsumer struct {
 	sync.Mutex
 	Consumer
 }
 
-// Provides a consumer that can execute only
+// NewSynced provides a consumer that can execute only
 // one operation at a time, and blocks
 // concurrent operations until the current one
 // finishes.
-func syncedConsumer(c Consumer) Consumer {
-	return &synced{Consumer: c}
+func NewSynced(name string) (Consumer, error) {
+	consumer, err := New(name)
+	if err != nil {
+		return nil, err
+	}
+	return &SyncedConsumer{Consumer: consumer}, nil
 }
 
-func (s *synced) Sync(endpoints []*pkg.Endpoint) error {
+func (s *SyncedConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	s.Lock()
 	defer s.Unlock()
 	return s.Consumer.Sync(endpoints)
 }
 
-func (s *synced) Process(endpoint *pkg.Endpoint) error {
+func (s *SyncedConsumer) Process(endpoint *pkg.Endpoint) error {
 	s.Lock()
 	defer s.Unlock()
 	return s.Consumer.Process(endpoint)

@@ -2,6 +2,7 @@ package producers
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
 	"time"
@@ -11,21 +12,15 @@ import (
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
 
-type endpointDefType int
-
-const (
-	none  endpointDefType = 0
-	ipDef endpointDefType = 1 << iota
-	hostnameDef
-)
-
 type fakeProducer struct {
 	channel chan *pkg.Endpoint
+	mode    string
 }
 
 func init() {
 	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default("example.org.").StringVar(&params.dnsName)
-	kingpin.Flag("fake-ip", "The fake IP addresse to use.").Default("8.8.8.8").StringVar(&params.ipAddress)
+	kingpin.Flag("fake-mode", "The mode to run in.").Default("ip").StringVar(&params.mode)
+	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default("example.org.").StringVar(&params.targetDomain)
 
 	rand.Seed(time.Now().UnixNano())
 }
@@ -33,6 +28,7 @@ func init() {
 func NewFake() (*fakeProducer, error) {
 	return &fakeProducer{
 		channel: make(chan *pkg.Endpoint),
+		mode:    params.mode,
 	}, nil
 }
 
@@ -40,7 +36,7 @@ func (a *fakeProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	endpoints := make([]*pkg.Endpoint, 0)
 
 	for i := 0; i < 10; i++ {
-		endpoints = append(endpoints, genEndpoint())
+		endpoints = append(endpoints, a.generateEndpoint())
 	}
 
 	return endpoints, nil
@@ -48,7 +44,7 @@ func (a *fakeProducer) Endpoints() ([]*pkg.Endpoint, error) {
 
 func (a *fakeProducer) StartWatch() error {
 	for {
-		a.channel <- genEndpoint()
+		a.channel <- a.generateEndpoint()
 		time.Sleep(5 * time.Second)
 	}
 
@@ -57,6 +53,28 @@ func (a *fakeProducer) StartWatch() error {
 
 func (a *fakeProducer) ResultChan() (chan *pkg.Endpoint, error) {
 	return a.channel, nil
+}
+
+func (a *fakeProducer) generateEndpoint() *pkg.Endpoint {
+	endpoint := &pkg.Endpoint{
+		DNSName: fmt.Sprintf("%s.%s", randomString(2), params.dnsName),
+	}
+
+	switch a.mode {
+	case "ip":
+		endpoint.IP = net.IPv4(
+			byte(randomNumber(1, 255)),
+			byte(randomNumber(1, 255)),
+			byte(randomNumber(1, 255)),
+			byte(randomNumber(1, 255)),
+		).String()
+	case "hostname":
+		endpoint.Hostname = fmt.Sprintf("%s.%s", randomString(6), params.targetDomain)
+	default:
+		log.Fatalf("Unknown mode: %s", a.mode)
+	}
+
+	return endpoint
 }
 
 func randomNumber(min, max int) int {
@@ -71,42 +89,4 @@ func randomString(n int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
-}
-
-func rollEndpointDef() endpointDefType {
-	return endpointDefType(rand.Intn(int(ipDef|hostnameDef) + 1))
-}
-
-func (epd endpointDefType) hasIP() bool {
-	return epd&ipDef != 0
-}
-
-func (epd endpointDefType) hasHostname() bool {
-	return epd&hostnameDef != 0
-}
-
-func genHostname() string {
-	return fmt.Sprintf("%s.%s", randomString(6), randomString(6))
-}
-
-func genEndpoint() *pkg.Endpoint {
-	epd := rollEndpointDef()
-	endpoint := &pkg.Endpoint{
-		DNSName: fmt.Sprintf("%s.%s", randomString(2), params.dnsName),
-	}
-
-	if epd.hasIP() {
-		endpoint.IP = net.IPv4(
-			byte(randomNumber(1, 255)),
-			byte(randomNumber(1, 255)),
-			byte(randomNumber(1, 255)),
-			byte(randomNumber(1, 255)),
-		).String()
-	}
-
-	if epd.hasHostname() {
-		endpoint.Hostname = genHostname()
-	}
-
-	return endpoint
 }

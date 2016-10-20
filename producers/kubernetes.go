@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	defaultKubeServer     = "http://127.0.0.1:8001"
-	defaultFormat         = "{{.Namespace}}-{{.Name}}"
-	hostnameAnnotationKey = "EXTERNAL_HOSTNAME"
+	defaultKubeServer = "http://127.0.0.1:8001"
+	defaultFormat     = "{{.Namespace}}-{{.Name}}"
+	annotationKey     = "k8s.zalando.de/dnsname"
 )
 
 type kubernetesProducer struct {
@@ -71,7 +71,7 @@ func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 			continue
 		}
 
-		ep, err := a.mapService(svc)
+		ep, err := a.convertToEndpoint(svc)
 		if err != nil {
 			// TODO: consider allowing the service continue running and just log this error
 			return nil, err
@@ -113,7 +113,7 @@ func (a *kubernetesProducer) StartWatch() error {
 			continue
 		}
 
-		ep, err := a.mapService(*svc)
+		ep, err := a.convertToEndpoint(*svc)
 		if err != nil {
 			// TODO: consider letting the service continue running and just log this error
 			return err
@@ -129,30 +129,30 @@ func (a *kubernetesProducer) ResultChan() (chan *pkg.Endpoint, error) {
 	return a.channel, nil
 }
 
-func validateService(svc api.Service) (valid bool, problem string) {
+func validateService(svc api.Service) (bool, string) {
 	switch {
 	case len(svc.Status.LoadBalancer.Ingress) == 0:
-		problem = fmt.Sprintf(
+		return false, fmt.Sprintf(
 			"The load balancer of service '%s/%s' does not have any ingress.",
 			svc.Namespace, svc.Name,
 		)
 	case len(svc.Status.LoadBalancer.Ingress) > 1:
-		problem = fmt.Sprintf(
+		// TODO(linki): in case we have multiple ingress we can just create multiple A or CNAME records
+		return false, fmt.Sprintf(
 			"Cannot register service '%s/%s'. More than one ingress is not supported",
 			svc.Namespace, svc.Name,
 		)
-	default:
-		valid = true
 	}
 
-	return
+	return true, ""
 }
 
-func (a *kubernetesProducer) mapService(svc api.Service) (*pkg.Endpoint, error) {
-	ep := &pkg.Endpoint{}
-	if hn := svc.ObjectMeta.Annotations[hostnameAnnotationKey]; hn != "" {
-		ep.DNSName = hn
-	} else {
+func (a *kubernetesProducer) convertToEndpoint(svc api.Service) (*pkg.Endpoint, error) {
+	ep := &pkg.Endpoint{
+		DNSName: svc.ObjectMeta.Annotations[annotationKey],
+	}
+
+	if ep.DNSName == "" {
 		var buf bytes.Buffer
 		if err := a.tmpl.Execute(&buf, svc); err != nil {
 			return nil, fmt.Errorf("Error applying template: %s", err)
@@ -162,17 +162,12 @@ func (a *kubernetesProducer) mapService(svc api.Service) (*pkg.Endpoint, error) 
 	}
 
 	for _, i := range svc.Status.LoadBalancer.Ingress {
-		if ep.IP != "" && ep.Hostname != "" {
-			break
-		}
+		ep.IP = i.IP
+		ep.Hostname = i.Hostname
 
-		if i.IP != "" {
-			ep.IP = i.IP
-		}
-
-		if i.Hostname != "" {
-			ep.Hostname = i.Hostname
-		}
+		// take the first entry and exit
+		// TODO(linki): we could easily return a list of endpoints
+		break
 	}
 
 	return ep, nil

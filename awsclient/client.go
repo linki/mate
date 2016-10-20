@@ -173,23 +173,18 @@ func hostedZoneSuffix(name string) string {
 func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
 	var endpoints []*pkg.Endpoint
 	for _, s := range sets {
-		if aws.StringValue(s.Type) != "A" {
+		if aws.StringValue(s.Type) != "CNAME" {
 			continue
 		}
 
-		var ip, hostname string
-		if s.AliasTarget != nil {
-			hostname = aws.StringValue(s.AliasTarget.DNSName)
-		} else {
-			for _, r := range s.ResourceRecords {
-				ip = aws.StringValue(r.Value)
-				break
-			}
+		var hostname string
+		for _, r := range s.ResourceRecords {
+			hostname = aws.StringValue(r.Value)
+			break
 		}
 
 		endpoints = append(endpoints, &pkg.Endpoint{
 			DNSName:  aws.StringValue(s.Name),
-			IP:       ip,
 			Hostname: hostname,
 		})
 	}
@@ -199,24 +194,15 @@ func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
 
 func (c *Client) mapEndpoint(ep *pkg.Endpoint, aliasHostedZoneId *string) *route53.ResourceRecordSet {
 	ttl := int64(c.options.RecordSetTTL)
-	vfalse := false
 	rs := &route53.ResourceRecordSet{
-		Type: aws.String("A"),
+		Type: aws.String("CNAME"),
 		Name: aws.String(ep.DNSName),
 	}
 
-	if ep.IP != "" {
-		rs.TTL = &ttl
-		rs.ResourceRecords = []*route53.ResourceRecord{{
-			Value: aws.String(ep.IP),
-		}}
-	} else {
-		rs.AliasTarget = &route53.AliasTarget{
-			DNSName:              aws.String(ep.Hostname),
-			HostedZoneId:         cleanHostedZoneID(aliasHostedZoneId),
-			EvaluateTargetHealth: &vfalse,
-		}
-	}
+	rs.TTL = &ttl
+	rs.ResourceRecords = []*route53.ResourceRecord{{
+		Value: aws.String(ep.Hostname),
+	}}
 
 	return rs
 }

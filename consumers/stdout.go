@@ -15,11 +15,7 @@ func NewStdout() (Consumer, error) {
 }
 
 func value(ep *pkg.Endpoint) string {
-	if ep.IP != "" {
-		return ep.IP
-	}
-
-	return ep.Hostname
+	return fmt.Sprintf("%s - %s", ep.IP, ep.Hostname)
 }
 
 func (d *stdoutConsumer) Sync(endpoints []*pkg.Endpoint) error {
