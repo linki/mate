@@ -19,8 +19,8 @@ import (
 
 const (
 	defaultKubeServer = "http://127.0.0.1:8001"
-	defaultFormat     = "{{.Namespace}}-{{.Name}}"
-	annotationKey     = "k8s.zalando.de/dnsname"
+	defaultFormat     = "{{.Name}}-{{.Namespace}}"
+	annotationKey     = "k8s.zalando.org/dnsname"
 )
 
 type kubernetesProducer struct {
