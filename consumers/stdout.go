@@ -14,15 +14,19 @@ func NewStdout() (Consumer, error) {
 	return &stdoutConsumer{}, nil
 }
 
+func value(ep *pkg.Endpoint) string {
+	return fmt.Sprintf("%s - %s", ep.IP, ep.Hostname)
+}
+
 func (d *stdoutConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	for _, e := range endpoints {
-		fmt.Println(e.DNSName, e.IP)
+		fmt.Println("sync record:", e.DNSName, value(e))
 	}
 
 	return nil
 }
 
 func (d *stdoutConsumer) Process(endpoint *pkg.Endpoint) error {
-	fmt.Println(endpoint.DNSName, endpoint.IP)
+	fmt.Println("process record:", endpoint.DNSName, value(endpoint))
 	return nil
 }

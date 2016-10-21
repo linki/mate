@@ -10,6 +10,7 @@ import (
 type awsTestItem struct {
 	msg          string
 	init         map[string]string
+	initAlias    map[string]string
 	sync         []*pkg.Endpoint
 	process      *pkg.Endpoint
 	fail         bool
@@ -55,7 +56,7 @@ func checkEndpointSlices(got, expect []*pkg.Endpoint) bool {
 }
 
 func testAWSConsumer(t *testing.T, ti awsTestItem) {
-	client := &awsclienttest.Client{Records: ti.init}
+	client := &awsclienttest.Client{Records: ti.init, AliasRecords: ti.initAlias}
 	if ti.fail {
 		client.FailNext()
 	}
@@ -93,47 +94,51 @@ func TestAWSConsumer(t *testing.T) {
 	}, {
 		msg: "no initial, sync new ones",
 		sync: []*pkg.Endpoint{{
-			"foo.org", "1.2.3.4",
+			"foo.org", "1.2.3.4", "",
 		}, {
-			"bar.org", "5.6.7.8",
+			"bar.org", "", "abc.def.ghi",
 		}},
 		expectUpsert: []*pkg.Endpoint{{
-			"foo.org", "1.2.3.4",
+			"foo.org", "1.2.3.4", "",
 		}, {
-			"bar.org", "5.6.7.8",
+			"bar.org", "", "abc.def.ghi",
 		}},
 	}, {
 		msg: "sync delete all",
 		init: map[string]string{
 			"foo.org": "1.2.3.4",
-			"bar.org": "5.6.7.8",
+		},
+		initAlias: map[string]string{
+			"bar.org": "abc.def.ghi",
 		},
 		expectDelete: []*pkg.Endpoint{{
-			"foo.org", "1.2.3.4",
+			"foo.org", "1.2.3.4", "",
 		}, {
-			"bar.org", "5.6.7.8",
+			"bar.org", "", "abc.def.ghi",
 		}},
 	}, {
 		msg: "insert, update, delete, leave",
 		init: map[string]string{
 			"foo.org": "1.2.3.4",
-			"bar.org": "5.6.7.8",
 			"baz.org": "9.0.1.2",
 		},
+		initAlias: map[string]string{
+			"bar.org": "abc.def.ghi",
+		},
 		sync: []*pkg.Endpoint{{
-			"qux.org", "4.5.6.7",
+			"qux.org", "4.5.6.7", "",
 		}, {
-			"foo.org", "8.9.0.1",
+			"foo.org", "8.9.0.1", "",
 		}, {
-			"baz.org", "9.0.1.2",
+			"baz.org", "9.0.1.2", "",
 		}},
 		expectUpsert: []*pkg.Endpoint{{
-			"qux.org", "4.5.6.7",
+			"qux.org", "4.5.6.7", "",
 		}, {
-			"foo.org", "8.9.0.1",
+			"foo.org", "8.9.0.1", "",
 		}},
 		expectDelete: []*pkg.Endpoint{{
-			"bar.org", "5.6.7.8",
+			"bar.org", "", "abc.def.ghi",
 		}},
 	}, {
 		msg: "fail on list",
@@ -142,7 +147,7 @@ func TestAWSConsumer(t *testing.T) {
 			"bar.org": "5.6.7.8",
 		},
 		sync: []*pkg.Endpoint{{
-			"baz.org", "9.0.1.2",
+			"baz.org", "9.0.1.2", "",
 		}},
 		fail:       true,
 		expectFail: true,
@@ -153,7 +158,7 @@ func TestAWSConsumer(t *testing.T) {
 			"bar.org": "5.6.7.8",
 		},
 		sync: []*pkg.Endpoint{{
-			"baz.org", "9.0.1.2",
+			"baz.org", "9.0.1.2", "",
 		}},
 		fail:       true,
 		expectFail: true,

@@ -22,8 +22,7 @@ const (
 var params struct {
 	producer string
 	consumer string
-	interval time.Duration
-	once     bool
+	sync     bool
 	debug    bool
 }
 
@@ -32,8 +31,7 @@ var version = "Unknown"
 func init() {
 	kingpin.Flag("producer", "The endpoints producer to use.").Required().StringVar(&params.producer)
 	kingpin.Flag("consumer", "The endpoints consumer to use.").Required().StringVar(&params.consumer)
-	kingpin.Flag("interval", "Interval in Duration format, e.g. 60s.").Short('i').Default(defaultInterval.String()).DurationVar(&params.interval)
-	kingpin.Flag("once", "Run once and exit").BoolVar(&params.once)
+	kingpin.Flag("sync", "Keep hosted zone in sync and remove records that don't belong to a service.").BoolVar(&params.sync)
 	kingpin.Flag("debug", "Enable debug logging.").BoolVar(&params.debug)
 }
 
@@ -50,16 +48,18 @@ func main() {
 		log.Fatalf("Error creating producer: %v", err)
 	}
 
-	c, err := consumers.New(params.consumer)
+	c, err := consumers.NewSynced(params.consumer)
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
 
-	ctrl := controller.New(p, c)
+	ctrl := controller.New(p, c, nil)
 
-	err = ctrl.Synchronize()
-	if err != nil {
-		log.Fatalln(err)
+	if params.sync {
+		err = ctrl.Synchronize()
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 
 	err = ctrl.Watch()

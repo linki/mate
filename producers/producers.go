@@ -8,8 +8,9 @@ import (
 )
 
 var params struct {
-	dnsName   string
-	ipAddress string
+	dnsName      string
+	mode         string
+	targetDomain string
 
 	project string
 	zone    string
@@ -17,10 +18,6 @@ var params struct {
 
 	kubeServer *url.URL
 	format     string
-
-	lushanServer string
-	authURL      *url.URL
-	token        string
 }
 
 type Producer interface {
@@ -32,17 +29,9 @@ type Producer interface {
 func New(name string) (Producer, error) {
 	switch name {
 	case "kubernetes":
-		p, err := NewKubernetes()
-		if err != nil {
-			return nil, fmt.Errorf("Error creating Kubernetes producer: %v", err)
-		}
-		return p, nil
+		return NewKubernetes()
 	case "fake":
-		p, err := NewFake()
-		if err != nil {
-			return nil, fmt.Errorf("Error creating Fake producer: %v", err)
-		}
-		return p, nil
+		return NewFake()
 	}
 	return nil, fmt.Errorf("Unknown producer '%s'.", name)
 }

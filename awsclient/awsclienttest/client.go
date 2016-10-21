@@ -7,10 +7,11 @@ import (
 )
 
 type Client struct {
-	Records    map[string]string
-	LastUpsert []*pkg.Endpoint
-	LastDelete []*pkg.Endpoint
-	failNext   error
+	Records      map[string]string
+	AliasRecords map[string]string
+	LastUpsert   []*pkg.Endpoint
+	LastDelete   []*pkg.Endpoint
+	failNext     error
 }
 
 func (c *Client) ListRecordSets() ([]*pkg.Endpoint, error) {
@@ -19,8 +20,13 @@ func (c *Client) ListRecordSets() ([]*pkg.Endpoint, error) {
 	}
 
 	var records []*pkg.Endpoint
+
 	for dns, ip := range c.Records {
 		records = append(records, &pkg.Endpoint{DNSName: dns, IP: ip})
+	}
+
+	for dns, hostname := range c.AliasRecords {
+		records = append(records, &pkg.Endpoint{DNSName: dns, Hostname: hostname})
 	}
 
 	return records, nil
@@ -33,12 +39,28 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 
 	c.LastDelete = del
 	for _, ep := range del {
-		delete(c.Records, ep.DNSName)
+		if ep.IP != "" {
+			delete(c.Records, ep.DNSName)
+		} else {
+			delete(c.AliasRecords, ep.DNSName)
+		}
 	}
 
 	c.LastUpsert = upsert
 	for _, ep := range upsert {
-		c.Records[ep.DNSName] = ep.IP
+		if ep.IP != "" {
+			if c.Records == nil {
+				c.Records = make(map[string]string)
+			}
+
+			c.Records[ep.DNSName] = ep.IP
+		} else {
+			if c.AliasRecords == nil {
+				c.AliasRecords = make(map[string]string)
+			}
+
+			c.AliasRecords[ep.DNSName] = ep.Hostname
+		}
 	}
 
 	return nil

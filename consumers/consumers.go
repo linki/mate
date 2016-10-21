@@ -21,12 +21,7 @@ type Consumer interface {
 	Process(*pkg.Endpoint) error
 }
 
-// Returns a synced Consumer implementation.
-//
-// TODO: consider whether the syncing is necessary,
-// and just drop if not. Usually, it is better to
-// care about syncing in a single place, optimally
-// on the caller side.
+// Returns a Consumer implementation.
 func New(name string) (Consumer, error) {
 	var create func() (Consumer, error)
 	switch name {
@@ -42,8 +37,8 @@ func New(name string) (Consumer, error) {
 
 	c, err := create()
 	if err != nil {
-		return nil, fmt.Errorf("error creating Google DNS consumer: %v", err)
+		return nil, fmt.Errorf("error creating consumer '%s': %v", name, err)
 	}
 
-	return syncedConsumer(c), nil
+	return c, nil
 }

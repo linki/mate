@@ -12,30 +12,44 @@ import (
 	"github.bus.zalan.do/teapot/mate/producers"
 )
 
+const (
+	defaultSyncPeriod = 1 * time.Minute
+)
+
 type Controller struct {
 	producer producers.Producer
 	consumer consumers.Consumer
+
+	options *Options
 
 	mutex sync.Mutex
 	wg    sync.WaitGroup
 }
 
-func New(producer producers.Producer, consumer consumers.Consumer) *Controller {
+type Options struct {
+	syncPeriod time.Duration
+}
+
+func New(producer producers.Producer, consumer consumers.Consumer, options *Options) *Controller {
+	if options == nil {
+		options = &Options{}
+	}
+
+	if options.syncPeriod == 0 {
+		options.syncPeriod = defaultSyncPeriod
+	}
+
 	return &Controller{
 		producer: producer,
 		consumer: consumer,
+		options:  options,
 	}
 }
 
 func (c *Controller) Synchronize() error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	c.wg.Add(1)
 
 	go func() {
-		defer c.wg.Done()
-
 		for {
 			log.Infoln("Synchronizing DNS entries...")
 
@@ -49,7 +63,7 @@ func (c *Controller) Synchronize() error {
 				log.Fatalf("Error consuming endpoints: %v", err)
 			}
 
-			time.Sleep(30 * time.Second)
+			time.Sleep(c.options.syncPeriod)
 		}
 	}()
 
@@ -80,9 +94,14 @@ func (c *Controller) monitorProducer() (chan *pkg.Endpoint, error) {
 	go func() {
 		defer c.wg.Done()
 
-		err := c.producer.StartWatch()
-		if err != nil {
-			log.Fatalln(err)
+		for {
+			err := c.producer.StartWatch()
+			switch {
+			case err == pkg.ErrEventChannelClosed:
+				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
+			case err != nil:
+				log.Fatalln(err)
+			}
 		}
 	}()
 
@@ -108,7 +127,7 @@ func (c *Controller) processUpdates(channel chan *pkg.Endpoint) error {
 				log.Fatalln(errors.New("channel closed"))
 			}
 
-			log.Infof("Processing (%s, %s)\n", endpoint.DNSName, endpoint.IP)
+			log.Infof("Processing (%s, %s, %s)\n", endpoint.DNSName, endpoint.IP, endpoint.Hostname)
 
 			err := c.consumer.Process(endpoint)
 			if err != nil {
