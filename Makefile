@@ -2,7 +2,7 @@
 
 BINARY        ?= mate
 VERSION       ?= $(shell git describe --tags --always --dirty)
-IMAGE         ?= pierone.stups.zalan.do/teapot/$(BINARY)
+IMAGE         ?= registry-write.opensource.zalan.do/teapot/$(BINARY)
 TAG           ?= $(VERSION)
 GITHEAD       = $(shell git rev-parse --short HEAD)
 GITURL        = $(shell git config --get remote.origin.url)
