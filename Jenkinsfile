@@ -4,7 +4,7 @@ go {
 
     // Push to pierone
     if ("master".equals(env.BRANCH_NAME)) {
-        docker.login()
+        docker.login("registry-write.opensource.zalan.do")
         buildStep("Build and push docker image") {
             stups.run("make build.push")
         }
