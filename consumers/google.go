@@ -53,7 +53,7 @@ func NewGoogleDNS() (Consumer, error) {
 	}, nil
 }
 
-func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
+func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint, clusterName string) error {
 	records, err := d.currentRecords()
 	if err != nil {
 		return err

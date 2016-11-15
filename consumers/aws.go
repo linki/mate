@@ -12,7 +12,7 @@ import (
 // Implementations provide access to AWS Route53 API's
 // required calls.
 type AWSClient interface {
-	ListRecordSets() ([]*pkg.Endpoint, error)
+	ListMateRecordSets(clusterName string) ([]*pkg.Endpoint, error)
 	ChangeRecordSets(upsert, del []*pkg.Endpoint) error
 }
 
@@ -42,8 +42,8 @@ func withClient(c AWSClient) *aws {
 	return &aws{c}
 }
 
-func (a *aws) Sync(endpoints []*pkg.Endpoint) error {
-	current, err := a.client.ListRecordSets()
+func (a *aws) Sync(endpoints []*pkg.Endpoint, clusterName string) error {
+	current, err := a.client.ListMateRecordSets(clusterName)
 	if err != nil {
 		return err
 	}

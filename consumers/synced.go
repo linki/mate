@@ -23,10 +23,10 @@ func NewSynced(name string) (Consumer, error) {
 	return &SyncedConsumer{Consumer: consumer}, nil
 }
 
-func (s *SyncedConsumer) Sync(endpoints []*pkg.Endpoint) error {
+func (s *SyncedConsumer) Sync(endpoints []*pkg.Endpoint, clusterName string) error {
 	s.Lock()
 	defer s.Unlock()
-	return s.Consumer.Sync(endpoints)
+	return s.Consumer.Sync(endpoints, clusterName)
 }
 
 func (s *SyncedConsumer) Process(endpoint *pkg.Endpoint) error {

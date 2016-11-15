@@ -2,7 +2,6 @@ package awsclient
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -53,39 +52,18 @@ func New(o Options) *Client {
 	return &Client{o}
 }
 
-func (c *Client) ListRecordSets() ([]*pkg.Endpoint, error) {
-	client, err := c.initClient()
+//ListMateRecordSets ...
+//retrieve all records (A records + TXT) created by mate and convert into endpoints
+func (c *Client) ListMateRecordSets(clusterName string) ([]*pkg.Endpoint, error) {
+	rs, err := c.getRecordSets()
 	if err != nil {
 		return nil, err
 	}
-
-	zoneID, err := c.getZoneID(client)
-	if err != nil {
-		return nil, err
-	}
-
-	if zoneID == nil {
-		return nil, fmt.Errorf("hosted zone not found: %s", c.options.HostedZone)
-	}
-
-	// TODO: implement paging
-	params := &route53.ListResourceRecordSetsInput{
-		HostedZoneId: zoneID,
-	}
-
-	rsp, err := client.ListResourceRecordSets(params)
-	if err != nil {
-		return nil, err
-	}
-
-	if rsp == nil {
-		return nil, ErrInvalidAWSResponse
-	}
-
-	return mapRecordSets(rsp.ResourceRecordSets), nil
+	frs := filterMate(rs, clusterName)
+	return mapRecordSets(frs), nil
 }
 
-func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint, clusterName string) error {
+func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	client, err := c.initClient()
 	if err != nil {
 		return err
@@ -97,12 +75,9 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint, clusterName strin
 	}
 
 	var changes []*route53.Change
-	changes = append(changes, c.upsertRecords(zoneID, upsert)...)
-	batch, err := c.deleteRecords(zoneID, clusterName, del)
-	if err != nil {
-		return err
-	}
-	changes = append(changes, batch...)
+	changes = append(changes, c.actionRecords("UPSERT", zoneID, upsert)...)
+	changes = append(changes, c.actionRecords("DELETE", zoneID, del)...)
+
 	if len(changes) == 0 {
 		return nil
 	}

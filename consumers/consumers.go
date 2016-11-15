@@ -17,7 +17,7 @@ var params struct {
 }
 
 type Consumer interface {
-	Sync([]*pkg.Endpoint) error
+	Sync([]*pkg.Endpoint, string) error
 	Process(*pkg.Endpoint) error
 }
 

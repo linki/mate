@@ -8,57 +8,20 @@ import (
 )
 
 //handle upsert and delete cases separately for ease of understanding
-func (c *Client) upsertRecords(zoneID *string, eps []*pkg.Endpoint) []*route53.Change {
+func (c *Client) actionRecords(action string, zoneID *string, eps []*pkg.Endpoint) []*route53.Change {
   var changes []*route53.Change
   for _, ep := range eps {
     changes = append(changes, &route53.Change{
-      Action: aws.String("UPSERT"),
+      Action: aws.String(action),
       ResourceRecordSet: ep.AWSARecordAlias(zoneID, int64(c.options.RecordSetTTL)),
     })
     changes = append(changes, &route53.Change{
-      Action: aws.String("UPSERT"),
+      Action: aws.String(action),
       ResourceRecordSet: ep.AWSTXTRecord(int64(c.options.RecordSetTTL)),
     })
   }
   return changes
 }
-
-func (c *Client) deleteRecords(zoneID *string, clusterName string, eps []*pkg.Endpoint) ([]*route53.Change, error) {
-  allrs, err := c.getRecordSets()
-  if err != nil {
-    return nil, err
-  }
-  //filter out TXT records to extract hostnames belonging to mate
-  matenames := make([]string, 0, 0)
-  changes := make([]*route53.Change, 0, 0)
-  for _, rs := range allrs {
-    if aws.StringValue(rs.Type) == "TXT" && len(rs.ResourceRecords) == 1 {
-      resource := rs.ResourceRecords[0]
-      if aws.StringValue(resource.Value) == pkg.GetMateValue(clusterName) {
-        matenames = append(matenames, *rs.Name)
-      }
-    }
-  }
-  for _, ep := range eps {
-    dns := ep.DNSName
-    isMate := false
-    for _, name := range matenames {
-      isMate = isMate || (pkg.FQDN(dns) == pkg.FQDN(name))
-    }
-    if isMate {
-      changes = append(changes, &route53.Change{
-        Action: aws.String("UPSERT"),
-        ResourceRecordSet: ep.AWSARecordAlias(zoneID, int64(c.options.RecordSetTTL)),
-      })
-      changes = append(changes, &route53.Change{
-        Action: aws.String("UPSERT"),
-        ResourceRecordSet: ep.AWSTXTRecord(int64(c.options.RecordSetTTL)),
-      })      
-    }
-  }
-  return changes, nil
-}
-
 
 //get record sets in raw format
 func (c *Client) getRecordSets() ([]*route53.ResourceRecordSet, error) {
@@ -91,4 +54,31 @@ func (c *Client) getRecordSets() ([]*route53.ResourceRecordSet, error) {
 	}
 
 	return rsp.ResourceRecordSets, nil
+}
+//filter out to include only mate created resource records
+func filterMate(allrs []*route53.ResourceRecordSet, clusterName string) []*route53.ResourceRecordSet {
+  matenames := make([]string, 0, 0)
+  res := make([]*route53.ResourceRecordSet, 0, 0)
+  for _, rs := range allrs {
+    if aws.StringValue(rs.Type) == "TXT" && len(rs.ResourceRecords) == 1 {
+      resource := rs.ResourceRecords[0]
+      if aws.StringValue(resource.Value) == pkg.GetMateValue(clusterName) {
+        matenames = append(matenames, *rs.Name)
+      }
+    }
+  }
+  for _, rs := range allrs {
+    if aws.StringValue(rs.Type) != "A"{
+      continue
+    }
+    name := aws.StringValue(rs.Name)
+    isMate := false
+    for _, mname := range matenames {
+      isMate = isMate || (pkg.FQDN(name) == pkg.FQDN(mname))
+    }
+    if isMate {
+      res = append(res, rs)
+    }
+  }  
+  return res
 }
