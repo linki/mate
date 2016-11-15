@@ -85,7 +85,7 @@ func (c *Client) ListRecordSets() ([]*pkg.Endpoint, error) {
 	return mapRecordSets(rsp.ResourceRecordSets), nil
 }
 
-func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
+func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint, clusterName string) error {
 	client, err := c.initClient()
 	if err != nil {
 		return err
@@ -97,8 +97,12 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	}
 
 	var changes []*route53.Change
-	changes = append(changes, c.mapEndpoints("UPSERT", upsert, zoneID)...)
-	changes = append(changes, c.mapEndpoints("DELETE", del, zoneID)...)
+	changes = append(changes, c.upsertRecords(zoneID, upsert)...)
+	batch, err := c.deleteRecords(zoneID, clusterName, del)
+	if err != nil {
+		return err
+	}
+	changes = append(changes, batch...)
 	if len(changes) == 0 {
 		return nil
 	}
@@ -190,34 +194,4 @@ func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
 	}
 
 	return endpoints
-}
-
-func (c *Client) mapEndpoint(ep *pkg.Endpoint, aliasHostedZoneId *string) *route53.ResourceRecordSet {
-	ttl := int64(c.options.RecordSetTTL)
-	rs := &route53.ResourceRecordSet{
-		Type: aws.String("CNAME"),
-		Name: aws.String(ep.DNSName),
-	}
-
-	rs.TTL = &ttl
-	rs.ResourceRecords = []*route53.ResourceRecord{{
-		Value: aws.String(ep.Hostname),
-	}}
-
-	return rs
-}
-
-// AWS alias records have a required field expecting the hosted zone id.
-// Tested only with the AWS Console, aliases to load balancers don't work
-// across hosted zones, but API expects this field, so let them have it.
-func (c *Client) mapEndpoints(action string, endpoints []*pkg.Endpoint, aliasHostedZoneId *string) []*route53.Change {
-	var changes []*route53.Change
-	for _, ep := range endpoints {
-		changes = append(changes, &route53.Change{
-			Action:            aws.String(action),
-			ResourceRecordSet: c.mapEndpoint(ep, aliasHostedZoneId),
-		})
-	}
-
-	return changes
 }
