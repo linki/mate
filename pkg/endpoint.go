@@ -57,9 +57,14 @@ func (ep *Endpoint) AWSTXTRecord(ttl int64) *route53.ResourceRecordSet{
 		Name: aws.String(ep.DNSName),
 		TTL: &ttl,
 		ResourceRecords: []*route53.ResourceRecord{{
-			Value: aws.String(fmt.Sprintf("\"mate:%s\"", clusterName)),
+			Value: aws.String(GetMateValue(clusterName)),
 		}},
 	}
 	return rs
 }
 
+//GetMateValue ...
+//convert to mate value in a TXT record
+func GetMateValue(clusterName string) string{
+	return fmt.Sprintf("\"mate:%s\"", clusterName)
+}
