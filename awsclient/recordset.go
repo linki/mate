@@ -11,8 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/route53"
 )
 
-//handle upsert and delete cases separately for ease of understanding
-func (c *Client) actionRecords(action string, zoneID *string, eps []*pkg.Endpoint) []*route53.Change {
+func (c *Client) modifyRecords(action string, zoneID *string, eps []*pkg.Endpoint) []*route53.Change {
 	var changes []*route53.Change
 	for _, ep := range eps {
 		changes = append(changes, &route53.Change{
@@ -118,9 +117,11 @@ func (c *Client) attachELBZoneIDs(eps []*pkg.Endpoint) error {
 }
 
 func extractELBName(dns string) string {
-	i := strings.Index(dns, "-")
-	if i == -1 {
-		return ""
+	idot := strings.Index(dns, ".")
+	if idot == -1 {
+		return dns
 	}
-	return dns[:i]
+	firstlvl := dns[:idot]
+	lhyphen := strings.LastIndex(firstlvl, "-")
+	return firstlvl[:lhyphen]
 }

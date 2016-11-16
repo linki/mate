@@ -14,7 +14,6 @@ import (
 
 const (
 	defaultSyncPeriod = 1 * time.Minute
-	clusterName       = "dummy"
 )
 
 type Controller struct {

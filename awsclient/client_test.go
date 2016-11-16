@@ -27,7 +27,7 @@ func TestAWSWithProvider(t *testing.T) {
 	zone := os.Getenv(awsHostedZoneVarName)
 	client := New(Options{HostedZone: zone})
 
-	sets, err := client.ListRecordSets()
+	sets, err := client.ListMateRecordSets()
 	if err != nil {
 		t.Error(err)
 		return
@@ -42,7 +42,7 @@ func TestAWSWithProvider(t *testing.T) {
 		return
 	}
 
-	sets, err = client.ListRecordSets()
+	sets, err = client.ListMateRecordSets()
 	if err != nil {
 		t.Error(err)
 		return
@@ -66,7 +66,7 @@ func TestAWSWithProvider(t *testing.T) {
 		return
 	}
 
-	setsCheck, err := client.ListRecordSets()
+	setsCheck, err := client.ListMateRecordSets()
 	if err != nil {
 		t.Error(err)
 		return
@@ -109,7 +109,7 @@ func TestAWSAliasWithProvider(t *testing.T) {
 	zone := os.Getenv(awsHostedZoneVarName)
 	client := New(Options{HostedZone: zone})
 
-	sets, err := client.ListRecordSets()
+	sets, err := client.ListMateRecordSets()
 	if err != nil {
 		t.Error(err)
 		return
@@ -139,7 +139,7 @@ func TestAWSAliasWithProvider(t *testing.T) {
 		}
 	}
 
-	sets, err = client.ListRecordSets()
+	sets, err = client.ListMateRecordSets()
 	if err != nil {
 		t.Error(err)
 		return
@@ -164,7 +164,7 @@ func TestAWSAliasWithProvider(t *testing.T) {
 		return
 	}
 
-	setsCheck, err := client.ListRecordSets()
+	setsCheck, err := client.ListMateRecordSets()
 	if err != nil {
 		t.Error(err)
 		return

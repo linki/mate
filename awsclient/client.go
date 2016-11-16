@@ -85,8 +85,8 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	}
 
 	var changes []*route53.Change
-	changes = append(changes, c.actionRecords("UPSERT", zoneID, upsert)...)
-	changes = append(changes, c.actionRecords("DELETE", zoneID, del)...)
+	changes = append(changes, c.modifyRecords("UPSERT", zoneID, upsert)...)
+	changes = append(changes, c.modifyRecords("DELETE", zoneID, del)...)
 	if len(changes) == 0 {
 		return nil
 	}
