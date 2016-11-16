@@ -9,6 +9,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/elb"
 	"github.com/aws/aws-sdk-go/service/route53"
 )
 
@@ -60,11 +61,19 @@ func (c *Client) ListMateRecordSets(clusterName string) ([]*pkg.Endpoint, error)
 		return nil, err
 	}
 	frs := filterMate(rs, clusterName)
-	return mapRecordSets(frs), nil
+	eps := mapRecordSets(frs)
+	if err != nil {
+		return nil, err
+	}
+	return eps, nil
 }
 
 func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
-	client, err := c.initClient()
+	err := c.attachELBZoneIDs(upsert)
+	if err != nil {
+		return err
+	}
+	client, err := c.initRoute53Client()
 	if err != nil {
 		return err
 	}
@@ -77,7 +86,6 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	var changes []*route53.Change
 	changes = append(changes, c.actionRecords("UPSERT", zoneID, upsert)...)
 	changes = append(changes, c.actionRecords("DELETE", zoneID, del)...)
-
 	if len(changes) == 0 {
 		return nil
 	}
@@ -91,7 +99,7 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	return err
 }
 
-func (c *Client) initClient() (*route53.Route53, error) {
+func (c *Client) initRoute53Client() (*route53.Route53, error) {
 	session, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 		Config: aws.Config{
@@ -104,6 +112,20 @@ func (c *Client) initClient() (*route53.Route53, error) {
 	}
 
 	return route53.New(session), nil
+}
+
+func (c *Client) initELBClient() (*elb.ELB, error) {
+	session, err := session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+		Config: aws.Config{
+			Logger: aws.LoggerFunc(c.options.Log.Infoln),
+			CredentialsChainVerboseErrors: aws.Bool(true),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return elb.New(session), nil
 }
 
 func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
@@ -152,21 +174,16 @@ func hostedZoneSuffix(name string) string {
 func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
 	var endpoints []*pkg.Endpoint
 	for _, s := range sets {
-		if aws.StringValue(s.Type) != "CNAME" {
+		if aws.StringValue(s.Type) != "A" {
 			continue
 		}
 
-		var hostname string
-		for _, r := range s.ResourceRecords {
-			hostname = aws.StringValue(r.Value)
-			break
-		}
-
+		hostname := s.AliasTarget.DNSName
 		endpoints = append(endpoints, &pkg.Endpoint{
-			DNSName:  aws.StringValue(s.Name),
-			Hostname: hostname,
+			DNSName:     aws.StringValue(s.Name),
+			Hostname:    *hostname,
+			AliasZoneID: *s.AliasTarget.HostedZoneId,
 		})
 	}
-
 	return endpoints
 }

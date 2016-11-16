@@ -189,6 +189,12 @@
 			"revisionTime": "2016-10-17T21:13:44Z"
 		},
 		{
+			"checksumSHA1": "X6fiZ2b/U1WpYBzw5fqm2Wm8Hr0=",
+			"path": "github.com/aws/aws-sdk-go/service/elb",
+			"revision": "55795bd6e929e8721681ab89f5eebd8944162618",
+			"revisionTime": "2016-11-15T23:03:31Z"
+		},
+		{
 			"checksumSHA1": "gKWRHvwYyKp2O0RWI9HfanMwegw=",
 			"path": "github.com/aws/aws-sdk-go/service/route53",
 			"revision": "7557129b846473b8edd52853c077d21b7934b699",

@@ -75,7 +75,7 @@ func (a *aws) Process(endpoint *pkg.Endpoint) error {
 
 func needsUpsert(ep *pkg.Endpoint, currentEndpoints []*pkg.Endpoint) bool {
 	for _, cep := range currentEndpoints {
-		if cep.DNSName == ep.DNSName {
+		if pkg.FQDN(cep.DNSName) == pkg.FQDN(ep.DNSName) {
 			return cep.IP != ep.IP || cep.Hostname != ep.Hostname
 		}
 	}
@@ -85,7 +85,7 @@ func needsUpsert(ep *pkg.Endpoint, currentEndpoints []*pkg.Endpoint) bool {
 
 func needsDelete(ep *pkg.Endpoint, nextEndpoints []*pkg.Endpoint) bool {
 	for _, nep := range nextEndpoints {
-		if nep.DNSName == ep.DNSName {
+		if pkg.FQDN(nep.DNSName) == pkg.FQDN(ep.DNSName) {
 			return false
 		}
 	}
