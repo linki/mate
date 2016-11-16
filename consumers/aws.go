@@ -23,7 +23,7 @@ type aws struct {
 func init() {
 	kingpin.Flag("aws-hosted-zone", "The hosted zone name for the AWS consumer (required with AWS).").StringVar(&params.awsHostedZone)
 	kingpin.Flag("aws-record-set-ttl", "TTL for the record sets created by the AWS consumer.").IntVar(&params.awsTTL)
-	kingpin.Flag("cluster-name", "Cluster identifier to be used with mate txt records").Required().StringVar(&params.clusterName)
+	kingpin.Flag("aws-cluster-name", "Cluster identifier to be used with mate txt records").StringVar(&params.awsClusterName)
 }
 
 // NewAWS reates a Consumer instance to sync and process DNS
@@ -32,11 +32,13 @@ func NewAWSRoute53() (Consumer, error) {
 	if params.awsHostedZone == "" {
 		return nil, errors.New("please provide --aws-hosted-zone")
 	}
-
+	if params.awsClusterName == "" {
+		return nil, errors.New("please provide --aws-cluster-name")
+	}
 	return withClient(awsclient.New(awsclient.Options{
 		HostedZone:   params.awsHostedZone,
 		RecordSetTTL: params.awsTTL,
-		ClusterName:  params.clusterName,
+		ClusterName:  params.awsClusterName,
 	})), nil
 }
 

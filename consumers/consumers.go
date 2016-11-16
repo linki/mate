@@ -7,14 +7,14 @@ import (
 )
 
 var params struct {
-	domain        string
-	project       string
-	zone          string
-	awsAccountID  string
-	awsRole       string
-	awsHostedZone string
-	awsTTL        int
-	clusterName   string
+	domain         string
+	project        string
+	zone           string
+	awsAccountID   string
+	awsRole        string
+	awsHostedZone  string
+	awsTTL         int
+	awsClusterName string
 }
 
 type Consumer interface {
