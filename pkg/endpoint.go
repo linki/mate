@@ -10,7 +10,6 @@ import (
 
 var (
 	EvaluateTargetHealth = true
-	clusterName          = "dummy" //this needs to be replaced by quering for cluster name in kubernetes
 )
 
 // Endpoint is used to pass data from the producer to the consumer.
@@ -54,7 +53,7 @@ func (ep *Endpoint) AWSARecordAlias(ttl int64) *route53.ResourceRecordSet {
 
 //AWSTXTRecord ...
 //create a AWS TXT record
-func (ep *Endpoint) AWSTXTRecord(ttl int64) *route53.ResourceRecordSet {
+func (ep *Endpoint) AWSTXTRecord(ttl int64, clusterName string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("TXT"),
 		Name: aws.String(FQDN(ep.DNSName)),

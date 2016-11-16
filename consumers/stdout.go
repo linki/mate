@@ -18,7 +18,7 @@ func value(ep *pkg.Endpoint) string {
 	return fmt.Sprintf("%s - %s", ep.IP, ep.Hostname)
 }
 
-func (d *stdoutConsumer) Sync(endpoints []*pkg.Endpoint, clusterName string) error {
+func (d *stdoutConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	for _, e := range endpoints {
 		fmt.Println("sync record:", e.DNSName, value(e))
 	}

@@ -21,7 +21,7 @@ func (c *Client) actionRecords(action string, zoneID *string, eps []*pkg.Endpoin
 		})
 		changes = append(changes, &route53.Change{
 			Action:            aws.String(action),
-			ResourceRecordSet: ep.AWSTXTRecord(int64(c.options.RecordSetTTL)),
+			ResourceRecordSet: ep.AWSTXTRecord(int64(c.options.RecordSetTTL), c.options.ClusterName),
 		})
 	}
 	return changes
@@ -61,13 +61,13 @@ func (c *Client) getRecordSets() ([]*route53.ResourceRecordSet, error) {
 }
 
 //filter out to include only mate created resource records
-func filterMate(allrs []*route53.ResourceRecordSet, clusterName string) []*route53.ResourceRecordSet {
+func (c *Client) filterMate(allrs []*route53.ResourceRecordSet) []*route53.ResourceRecordSet {
 	matenames := make([]string, 0, 0)
 	res := make([]*route53.ResourceRecordSet, 0, 0)
 	for _, rs := range allrs {
 		if aws.StringValue(rs.Type) == "TXT" && len(rs.ResourceRecords) == 1 {
 			resource := rs.ResourceRecords[0]
-			if aws.StringValue(resource.Value) == pkg.GetMateValue(clusterName) {
+			if aws.StringValue(resource.Value) == pkg.GetMateValue(c.options.ClusterName) {
 				matenames = append(matenames, *rs.Name)
 			}
 		}

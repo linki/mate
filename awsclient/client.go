@@ -33,6 +33,7 @@ type Options struct {
 	HostedZone   string
 	RecordSetTTL int
 	Log          Logger
+	ClusterName  string
 }
 
 type Client struct {
@@ -55,12 +56,12 @@ func New(o Options) *Client {
 
 //ListMateRecordSets ...
 //retrieve all records (A records + TXT) created by mate and convert into endpoints
-func (c *Client) ListMateRecordSets(clusterName string) ([]*pkg.Endpoint, error) {
+func (c *Client) ListMateRecordSets() ([]*pkg.Endpoint, error) {
 	rs, err := c.getRecordSets()
 	if err != nil {
 		return nil, err
 	}
-	frs := filterMate(rs, clusterName)
+	frs := c.filterMate(rs)
 	eps := mapRecordSets(frs)
 	if err != nil {
 		return nil, err

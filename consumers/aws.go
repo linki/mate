@@ -12,7 +12,7 @@ import (
 // Implementations provide access to AWS Route53 API's
 // required calls.
 type AWSClient interface {
-	ListMateRecordSets(clusterName string) ([]*pkg.Endpoint, error)
+	ListMateRecordSets() ([]*pkg.Endpoint, error)
 	ChangeRecordSets(upsert, del []*pkg.Endpoint) error
 }
 
@@ -23,6 +23,7 @@ type aws struct {
 func init() {
 	kingpin.Flag("aws-hosted-zone", "The hosted zone name for the AWS consumer (required with AWS).").StringVar(&params.awsHostedZone)
 	kingpin.Flag("aws-record-set-ttl", "TTL for the record sets created by the AWS consumer.").IntVar(&params.awsTTL)
+	kingpin.Flag("cluster-name", "Cluster identifier to be used with mate txt records").Required().StringVar(&params.clusterName)
 }
 
 // NewAWS reates a Consumer instance to sync and process DNS
@@ -35,6 +36,7 @@ func NewAWSRoute53() (Consumer, error) {
 	return withClient(awsclient.New(awsclient.Options{
 		HostedZone:   params.awsHostedZone,
 		RecordSetTTL: params.awsTTL,
+		ClusterName:  params.clusterName,
 	})), nil
 }
 
@@ -42,8 +44,8 @@ func withClient(c AWSClient) *aws {
 	return &aws{c}
 }
 
-func (a *aws) Sync(endpoints []*pkg.Endpoint, clusterName string) error {
-	current, err := a.client.ListMateRecordSets(clusterName)
+func (a *aws) Sync(endpoints []*pkg.Endpoint) error {
+	current, err := a.client.ListMateRecordSets()
 	if err != nil {
 		return err
 	}

@@ -14,10 +14,11 @@ var params struct {
 	awsRole       string
 	awsHostedZone string
 	awsTTL        int
+	clusterName   string
 }
 
 type Consumer interface {
-	Sync([]*pkg.Endpoint, string) error
+	Sync([]*pkg.Endpoint) error
 	Process(*pkg.Endpoint) error
 }
 

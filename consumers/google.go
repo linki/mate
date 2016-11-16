@@ -10,7 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/dns/v1"
+	dns "google.golang.org/api/dns/v1"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -53,7 +53,7 @@ func NewGoogleDNS() (Consumer, error) {
 	}, nil
 }
 
-func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint, clusterName string) error {
+func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	records, err := d.currentRecords()
 	if err != nil {
 		return err

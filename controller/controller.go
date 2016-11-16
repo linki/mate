@@ -14,7 +14,7 @@ import (
 
 const (
 	defaultSyncPeriod = 1 * time.Minute
-	clusterName = "dummy"
+	clusterName       = "dummy"
 )
 
 type Controller struct {
@@ -59,7 +59,7 @@ func (c *Controller) Synchronize() error {
 				log.Fatalf("Error getting endpoints from producer: %v", err)
 			}
 
-			err = c.consumer.Sync(endpoints, clusterName)
+			err = c.consumer.Sync(endpoints)
 			if err != nil {
 				log.Fatalf("Error consuming endpoints: %v", err)
 			}
