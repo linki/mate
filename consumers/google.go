@@ -14,6 +14,11 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
+const (
+	heritageLabel = "heritage=mate"
+	labelPrefix   = "mate/record-group-id="
+)
+
 type googleDNSConsumer struct {
 	client *dns.Service
 }
@@ -22,15 +27,20 @@ func init() {
 	//	kingpin.Flag("gcloud-domain", "The DNS domain to create DNS entries under.").StringVar(params.domain)
 	kingpin.Flag("google-project", "Project ID that manages the zone").StringVar(&params.project)
 	kingpin.Flag("google-zone", "Name of the zone to manage.").StringVar(&params.zone)
+	kingpin.Flag("google-record-group-id", "Name of the zone to manage.").StringVar(&params.recordGroupID)
 }
 
 func NewGoogleDNS() (Consumer, error) {
 	if params.zone == "" {
-		return nil, errors.New("Please provide --gcloud-zone")
+		return nil, errors.New("Please provide --google-zone")
 	}
 
 	if params.project == "" {
-		return nil, errors.New("Please provide --gcloud-project")
+		return nil, errors.New("Please provide --google-project")
+	}
+
+	if params.recordGroupID == "" {
+		return nil, errors.New("Please provide --google-record-group-id")
 	}
 
 	// if params.zone == "" {
@@ -54,32 +64,63 @@ func NewGoogleDNS() (Consumer, error) {
 }
 
 func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
-	records, err := d.currentRecords()
+	currentRecords, err := d.currentRecords()
 	if err != nil {
 		return err
 	}
 
 	log.Debugln("Current records:")
-	d.printRecords(records)
+	d.printRecords(currentRecords)
+
+	allRecords, err := d.allRecords()
+	if err != nil {
+		return err
+	}
 
 	change := new(dns.Change)
 
-	for _, svc := range endpoints {
-		change.Additions = append(change.Additions, &dns.ResourceRecordSet{
-			Name:    svc.DNSName,
-			Rrdatas: []string{svc.IP},
-			Ttl:     300,
-			Type:    "A",
-		})
+	records := make([]*pkg.Endpoint, 0)
+
+	for _, e := range endpoints {
+		labels, exists := allRecords[e.DNSName]
+
+		if !exists || exists && labelsMatch(labels) {
+			records = append(records, e)
+		}
 	}
 
-	for _, r := range records {
-		change.Deletions = append(change.Deletions, &dns.ResourceRecordSet{
-			Name:    r.Name,
-			Rrdatas: r.Rrdatas,
-			Ttl:     r.Ttl,
-			Type:    r.Type,
-		})
+	for _, svc := range records {
+		change.Additions = append(change.Additions,
+			&dns.ResourceRecordSet{
+				Name:    svc.DNSName,
+				Rrdatas: []string{svc.IP},
+				Ttl:     300,
+				Type:    "A",
+			},
+			&dns.ResourceRecordSet{
+				Name:    svc.DNSName,
+				Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+				Ttl:     300,
+				Type:    "TXT",
+			},
+		)
+	}
+
+	for _, r := range currentRecords {
+		change.Deletions = append(change.Deletions,
+			&dns.ResourceRecordSet{
+				Name:    r.Name,
+				Rrdatas: r.Rrdatas,
+				Ttl:     r.Ttl,
+				Type:    r.Type,
+			},
+			&dns.ResourceRecordSet{
+				Name:    r.Name,
+				Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+				Ttl:     r.Ttl,
+				Type:    "TXT",
+			},
+		)
 	}
 
 	err = d.applyChange(change)
@@ -100,6 +141,12 @@ func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {
 			Ttl:     300,
 			Type:    "A",
 		},
+		&dns.ResourceRecordSet{
+			Name:    endpoint.DNSName,
+			Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+			Ttl:     300,
+			Type:    "TXT",
+		},
 	}
 
 	err := d.applyChange(change)
@@ -111,6 +158,11 @@ func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {
 }
 
 func (d *googleDNSConsumer) applyChange(change *dns.Change) error {
+	if len(change.Additions) == 0 && len(change.Deletions) == 0 {
+		log.Infof("Didn't submit change (no changes)")
+		return nil
+	}
+
 	_, err := d.client.Changes.Create(params.project, params.zone, change).Do()
 	if err != nil {
 		if strings.Contains(err.Error(), "alreadyExists") {
@@ -129,10 +181,38 @@ func (d *googleDNSConsumer) currentRecords() ([]*dns.ResourceRecordSet, error) {
 		return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", params.project, params.zone, err)
 	}
 
-	records := make([]*dns.ResourceRecordSet, 0)
+	allRecords := make([]*dns.ResourceRecordSet, 0)
 	for _, r := range resp.Rrsets {
-		if r.Type == "A" {
+		if r.Type == "A" || r.Type == "TXT" {
+			allRecords = append(allRecords, r)
+		}
+	}
+
+	records := make([]*dns.ResourceRecordSet, 0)
+	for _, r := range allRecords {
+		if r.Type == "A" && isResponsible(allRecords, r) {
 			records = append(records, r)
+		}
+	}
+
+	return records, nil
+}
+
+func (d *googleDNSConsumer) allRecords() (map[string][]string, error) {
+	resp, err := d.client.ResourceRecordSets.List(params.project, params.zone).Do()
+	if err != nil {
+		return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", params.project, params.zone, err)
+	}
+
+	records := map[string][]string{}
+
+	for _, r := range resp.Rrsets {
+		if r.Type == "TXT" {
+			records[r.Name] = r.Rrdatas
+		} else {
+			if _, exists := records[r.Name]; !exists {
+				records[r.Name] = nil
+			}
 		}
 	}
 
@@ -143,4 +223,20 @@ func (d *googleDNSConsumer) printRecords(records []*dns.ResourceRecordSet) {
 	for _, r := range records {
 		log.Debugln(" ", r.Name, r.Type, r.Rrdatas)
 	}
+}
+
+func isResponsible(records []*dns.ResourceRecordSet, record *dns.ResourceRecordSet) bool {
+	for _, r := range records {
+		if record.Name == r.Name && r.Type == "TXT" {
+			if labelsMatch(r.Rrdatas) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func labelsMatch(labels []string) bool {
+	return labels != nil && labels[0] == heritageLabel && labels[1] == labelPrefix+params.recordGroupID
 }
