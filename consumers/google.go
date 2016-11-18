@@ -10,7 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
-	dns "google.golang.org/api/dns/v1"
+	"google.golang.org/api/dns/v1"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -94,7 +94,7 @@ func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {
 	change := new(dns.Change)
 
 	change.Additions = []*dns.ResourceRecordSet{
-		&dns.ResourceRecordSet{
+		{
 			Name:    endpoint.DNSName,
 			Rrdatas: []string{endpoint.IP},
 			Ttl:     300,

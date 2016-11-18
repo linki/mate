@@ -2,14 +2,12 @@ package awsclient
 
 import (
 	"errors"
-	"strings"
+	"fmt"
 	"time"
 
 	"github.bus.zalan.do/teapot/mate/pkg"
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/elb"
 	"github.com/aws/aws-sdk-go/service/route53"
 )
 
@@ -33,7 +31,7 @@ type Options struct {
 	HostedZone   string
 	RecordSetTTL int
 	Log          Logger
-	ClusterName  string
+	GroupID      string
 }
 
 type Client struct {
@@ -54,26 +52,38 @@ func New(o Options) *Client {
 	return &Client{o}
 }
 
-//ListMateRecordSets ...
-//retrieve all records (A records + TXT) created by mate and convert into endpoints
-func (c *Client) ListMateRecordSets() ([]*pkg.Endpoint, error) {
-	rs, err := c.getRecordSets()
+//ListRecordSets ...
+//retrieve A records filtered by aws group id
+func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
+	client, err := c.initRoute53Client()
 	if err != nil {
 		return nil, err
 	}
-	frs := c.filterMate(rs)
-	eps := mapRecordSets(frs)
+	zoneID, err := c.getZoneID(client)
 	if err != nil {
 		return nil, err
 	}
-	return eps, nil
+	if zoneID == nil {
+		return nil, fmt.Errorf("hosted zone not found: %s", c.options.HostedZone)
+	}
+	// TODO: implement paging
+	params := &route53.ListResourceRecordSetsInput{
+		HostedZoneId: zoneID,
+	}
+	rsp, err := client.ListResourceRecordSets(params)
+	if err != nil {
+		return nil, err
+	}
+
+	if rsp == nil {
+		return nil, ErrInvalidAWSResponse
+	}
+
+	rsets := c.filterByGroupID(rsp.ResourceRecordSets)
+	return rsets, nil
 }
 
-func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
-	err := c.attachELBZoneIDs(upsert)
-	if err != nil {
-		return err
-	}
+func (c *Client) ChangeRecordSets(upsert, del []*route53.ResourceRecordSet) error {
 	client, err := c.initRoute53Client()
 	if err != nil {
 		return err
@@ -85,106 +95,48 @@ func (c *Client) ChangeRecordSets(upsert, del []*pkg.Endpoint) error {
 	}
 
 	var changes []*route53.Change
-	changes = append(changes, c.modifyRecords("UPSERT", zoneID, upsert)...)
-	changes = append(changes, c.modifyRecords("DELETE", zoneID, del)...)
-	if len(changes) == 0 {
-		return nil
+	changes = append(changes, mapChanges("UPSERT", upsert)...)
+	changes = append(changes, mapChanges("DELETE", del)...)
+	if len(changes) > 0 {
+		params := &route53.ChangeResourceRecordSetsInput{
+			ChangeBatch: &route53.ChangeBatch{
+				Changes: changes,
+			},
+			HostedZoneId: zoneID,
+		}
+		_, err = client.ChangeResourceRecordSets(params)
+		return err
 	}
-
-	changeSet := &route53.ChangeResourceRecordSetsInput{
-		ChangeBatch:  &route53.ChangeBatch{Changes: changes},
-		HostedZoneId: zoneID,
-	}
-
-	_, err = client.ChangeResourceRecordSets(changeSet)
-	return err
+	return nil
 }
 
-func (c *Client) initRoute53Client() (*route53.Route53, error) {
-	session, err := session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-		Config: aws.Config{
-			Logger: aws.LoggerFunc(c.options.Log.Infoln),
-			CredentialsChainVerboseErrors: aws.Bool(true),
-		},
-	})
+func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
+	var rset []*route53.ResourceRecordSet
+	elbs, err := c.getELBDescriptions(endpoints)
 	if err != nil {
 		return nil, err
 	}
-
-	return route53.New(session), nil
+	for _, ep := range endpoints {
+		aliasZoneID := getELBZoneID(ep, elbs)
+		rset = append(rset, mapEndpointAlias(ep, int64(c.options.RecordSetTTL), aliasZoneID))
+		rset = append(rset, mapEndpointTXT(ep, int64(c.options.RecordSetTTL), c.options.GroupID))
+	}
+	return rset, nil
 }
 
-func (c *Client) initELBClient() (*elb.ELB, error) {
-	session, err := session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-		Config: aws.Config{
-			Logger: aws.LoggerFunc(c.options.Log.Infoln),
-			CredentialsChainVerboseErrors: aws.Bool(true),
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	return elb.New(session), nil
-}
-
-func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
-	// TODO: handle when not all hosted zones fit in the response
-	zonesResult, err := ac.ListHostedZones(nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if zonesResult == nil {
-		return nil, ErrInvalidAWSResponse
-	}
-
-	zoneName := hostedZoneSuffix(c.options.HostedZone)
-
-	var zoneID *string
-	for _, z := range zonesResult.HostedZones {
-		if aws.StringValue(z.Name) == zoneName {
-			zoneID = z.Id
-			break
+func (c *Client) Diff(rset1 []*route53.ResourceRecordSet, rset2 []*route53.ResourceRecordSet) []*route53.ResourceRecordSet {
+	var diff []*route53.ResourceRecordSet
+	for _, r1 := range rset1 {
+		exist := false
+		for _, r2 := range rset2 {
+			if aws.StringValue(r1.Name) == aws.StringValue(r2.Name) {
+				exist = true
+				break
+			}
+		}
+		if !exist {
+			diff = append(diff, r1)
 		}
 	}
-
-	return zoneID, nil
-}
-
-func cleanHostedZoneID(zoneID *string) *string {
-	v := *zoneID
-	qualifierLength := strings.LastIndex(v, "/")
-	if qualifierLength < 0 {
-		return &v
-	}
-
-	v = v[qualifierLength+1:]
-	return &v
-}
-
-func hostedZoneSuffix(name string) string {
-	if !strings.HasSuffix(name, ".") {
-		return name + "."
-	}
-
-	return name
-}
-
-func mapRecordSets(sets []*route53.ResourceRecordSet) []*pkg.Endpoint {
-	var endpoints []*pkg.Endpoint
-	for _, s := range sets {
-		if aws.StringValue(s.Type) != "A" {
-			continue
-		}
-
-		hostname := s.AliasTarget.DNSName
-		endpoints = append(endpoints, &pkg.Endpoint{
-			DNSName:     aws.StringValue(s.Name),
-			Hostname:    *hostname,
-			AliasZoneID: *s.AliasTarget.HostedZoneId,
-		})
-	}
-	return endpoints
+	return diff
 }
