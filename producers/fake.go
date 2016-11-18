@@ -12,23 +12,33 @@ import (
 	"github.bus.zalan.do/teapot/mate/pkg"
 )
 
+const (
+	defaultDomain = "example.org."
+	ipMode        = "ip"
+	hostnameMode  = "hostname"
+)
+
 type fakeProducer struct {
-	channel chan *pkg.Endpoint
-	mode    string
+	channel      chan *pkg.Endpoint
+	mode         string
+	dnsName      string
+	targetDomain string
 }
 
 func init() {
-	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default("example.org.").StringVar(&params.dnsName)
-	kingpin.Flag("fake-mode", "The mode to run in.").Default("ip").StringVar(&params.mode)
-	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default("example.org.").StringVar(&params.targetDomain)
+	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default(defaultDomain).StringVar(&params.dnsName)
+	kingpin.Flag("fake-mode", "The mode to run in.").Default(ipMode).StringVar(&params.mode)
+	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default(defaultDomain).StringVar(&params.targetDomain)
 
 	rand.Seed(time.Now().UnixNano())
 }
 
 func NewFake() (*fakeProducer, error) {
 	return &fakeProducer{
-		channel: make(chan *pkg.Endpoint),
-		mode:    params.mode,
+		channel:      make(chan *pkg.Endpoint),
+		mode:         params.mode,
+		dnsName:      params.dnsName,
+		targetDomain: params.targetDomain,
 	}, nil
 }
 
@@ -57,19 +67,19 @@ func (a *fakeProducer) ResultChan() (chan *pkg.Endpoint, error) {
 
 func (a *fakeProducer) generateEndpoint() *pkg.Endpoint {
 	endpoint := &pkg.Endpoint{
-		DNSName: fmt.Sprintf("%s.%s", randomString(2), params.dnsName),
+		DNSName: fmt.Sprintf("%s.%s", randomString(2), a.dnsName),
 	}
 
 	switch a.mode {
-	case "ip":
+	case ipMode:
 		endpoint.IP = net.IPv4(
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 		).String()
-	case "hostname":
-		endpoint.Hostname = fmt.Sprintf("%s.%s", randomString(6), params.targetDomain)
+	case hostnameMode:
+		endpoint.Hostname = fmt.Sprintf("%s.%s", randomString(6), a.targetDomain)
 	default:
 		log.Fatalf("Unknown mode: %s", a.mode)
 	}
