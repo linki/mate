@@ -26,7 +26,7 @@ type aws struct {
 func init() {
 	kingpin.Flag("aws-hosted-zone", "The hosted zone name for the AWS consumer (required with AWS).").StringVar(&params.awsHostedZone)
 	kingpin.Flag("aws-record-set-ttl", "TTL for the record sets created by the AWS consumer.").IntVar(&params.awsTTL)
-	kingpin.Flag("aws-group-id", "Identifier to filter the mate records ").StringVar(&params.awsGroupID)
+	kingpin.Flag("aws-record-group-id", "Identifier to filter the mate records ").StringVar(&params.awsGroupID)
 }
 
 // NewAWS reates a Consumer instance to sync and process DNS
@@ -36,7 +36,7 @@ func NewAWSRoute53() (Consumer, error) {
 		return nil, errors.New("please provide --aws-hosted-zone")
 	}
 	if params.awsGroupID == "" {
-		return nil, errors.New("please provide --aws-group-id")
+		return nil, errors.New("please provide --aws-record-group-id")
 	}
 	return withClient(awsclient.New(awsclient.Options{
 		HostedZone:   params.awsHostedZone,
