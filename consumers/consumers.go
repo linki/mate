@@ -14,6 +14,7 @@ var params struct {
 	awsRole       string
 	awsHostedZone string
 	awsTTL        int
+	awsGroupID    string
 }
 
 type Consumer interface {

@@ -5,6 +5,7 @@ import (
 
 	"github.bus.zalan.do/teapot/mate/awsclient/awsclienttest"
 	"github.bus.zalan.do/teapot/mate/pkg"
+	"github.com/aws/aws-sdk-go/service/route53"
 )
 
 type awsTestItem struct {
@@ -33,20 +34,18 @@ func checkTestError(t *testing.T, err error, expect bool) bool {
 	return true
 }
 
-func checkEndpointSlices(got, expect []*pkg.Endpoint) bool {
-	if len(got) != len(expect) {
-		return false
-	}
-
+func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*pkg.Endpoint) bool {
 	for _, ep := range got {
+		if *ep.Type != "A" {
+			continue
+		}
 		var found bool
 		for _, eep := range expect {
-			if ep.DNSName == eep.DNSName && ep.IP == eep.IP {
+			if *ep.Name == pkg.SanitizeDNSName(eep.DNSName) && *ep.AliasTarget.DNSName == eep.Hostname {
 				found = true
 				break
 			}
 		}
-
 		if !found {
 			return false
 		}
@@ -56,7 +55,11 @@ func checkEndpointSlices(got, expect []*pkg.Endpoint) bool {
 }
 
 func testAWSConsumer(t *testing.T, ti awsTestItem) {
-	client := &awsclienttest.Client{Records: ti.init, AliasRecords: ti.initAlias}
+	client := &awsclienttest.Client{Records: ti.init, AliasRecords: ti.initAlias, Options: awsclienttest.Options{
+		HostedZone:   "test",
+		RecordSetTTL: 10,
+		GroupID:      "test",
+	}}
 	if ti.fail {
 		client.FailNext()
 	}
@@ -88,19 +91,15 @@ func testAWSConsumer(t *testing.T, ti awsTestItem) {
 	}
 }
 
-func TestAWSConsumer(t *testing.T) {
+func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias works
 	for _, ti := range []awsTestItem{{
 		msg: "no initial, no change",
 	}, {
 		msg: "no initial, sync new ones",
 		sync: []*pkg.Endpoint{{
-			"foo.org", "1.2.3.4", "",
-		}, {
 			"bar.org", "", "abc.def.ghi",
 		}},
 		expectUpsert: []*pkg.Endpoint{{
-			"foo.org", "1.2.3.4", "",
-		}, {
 			"bar.org", "", "abc.def.ghi",
 		}},
 	}, {
@@ -118,24 +117,24 @@ func TestAWSConsumer(t *testing.T) {
 		}},
 	}, {
 		msg: "insert, update, delete, leave",
-		init: map[string]string{
-			"foo.org": "1.2.3.4",
-			"baz.org": "9.0.1.2",
-		},
 		initAlias: map[string]string{
+			"foo.org": "foo.elb",
+			"baz.org": "baz.elb",
 			"bar.org": "abc.def.ghi",
 		},
 		sync: []*pkg.Endpoint{{
-			"qux.org", "4.5.6.7", "",
+			"qux.org", "", "qux.elb",
 		}, {
-			"foo.org", "8.9.0.1", "",
+			"foo.org", "", "foo.elb2",
 		}, {
-			"baz.org", "9.0.1.2", "",
+			"baz.org", "", "baz.elb2",
 		}},
 		expectUpsert: []*pkg.Endpoint{{
-			"qux.org", "4.5.6.7", "",
+			"qux.org", "", "qux.elb",
 		}, {
-			"foo.org", "8.9.0.1", "",
+			"foo.org", "", "foo.elb2",
+		}, {
+			"baz.org", "", "baz.elb2",
 		}},
 		expectDelete: []*pkg.Endpoint{{
 			"bar.org", "", "abc.def.ghi",
@@ -187,7 +186,8 @@ func TestAWSConsumer(t *testing.T) {
 		process:    &pkg.Endpoint{DNSName: "foo.org", IP: "2.3.4.5"},
 		fail:       true,
 		expectFail: true,
-	}} {
+	},
+	} {
 		t.Run(ti.msg, func(t *testing.T) {
 			testAWSConsumer(t, ti)
 		})

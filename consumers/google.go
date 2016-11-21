@@ -94,7 +94,7 @@ func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {
 	change := new(dns.Change)
 
 	change.Additions = []*dns.ResourceRecordSet{
-		&dns.ResourceRecordSet{
+		{
 			Name:    endpoint.DNSName,
 			Rrdatas: []string{endpoint.IP},
 			Ttl:     300,
