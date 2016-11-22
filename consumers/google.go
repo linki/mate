@@ -238,5 +238,7 @@ func isResponsible(records []*dns.ResourceRecordSet, record *dns.ResourceRecordS
 }
 
 func labelsMatch(labels []string) bool {
-	return labels != nil && labels[0] == heritageLabel && labels[1] == labelPrefix+params.recordGroupID
+	return labels != nil &&
+		labels[0][1:len(labels[0])-1] == heritageLabel &&
+		labels[1][1:len(labels[1])-1] == labelPrefix+params.recordGroupID
 }
