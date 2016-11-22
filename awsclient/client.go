@@ -79,11 +79,10 @@ func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
 		return nil, ErrInvalidAWSResponse
 	}
 
-	rsets := c.filterByGroupID(rsp.ResourceRecordSets)
-	return rsets, nil
+	return rsp.ResourceRecordSets, nil
 }
 
-func (c *Client) ChangeRecordSets(upsert, del []*route53.ResourceRecordSet) error {
+func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error {
 	client, err := c.initRoute53Client()
 	if err != nil {
 		return err
@@ -95,6 +94,7 @@ func (c *Client) ChangeRecordSets(upsert, del []*route53.ResourceRecordSet) erro
 	}
 
 	var changes []*route53.Change
+	changes = append(changes, mapChanges("CREATE", create)...)
 	changes = append(changes, mapChanges("UPSERT", upsert)...)
 	changes = append(changes, mapChanges("DELETE", del)...)
 	if len(changes) > 0 {
@@ -111,32 +111,38 @@ func (c *Client) ChangeRecordSets(upsert, del []*route53.ResourceRecordSet) erro
 }
 
 func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
-	var rset []*route53.ResourceRecordSet
 	elbs, err := c.getELBDescriptions(endpoints)
 	if err != nil {
 		return nil, err
 	}
+
+	var rset []*route53.ResourceRecordSet
+
 	for _, ep := range endpoints {
 		aliasZoneID := getELBZoneID(ep, elbs)
-		rset = append(rset, mapEndpointAlias(ep, int64(c.options.RecordSetTTL), aliasZoneID))
-		rset = append(rset, mapEndpointTXT(ep, int64(c.options.RecordSetTTL), c.options.GroupID))
+		rset = append(rset, c.MapEndpointAlias(ep, int64(c.options.RecordSetTTL), aliasZoneID))
+		rset = append(rset, c.MapEndpointTXT(ep, int64(c.options.RecordSetTTL)))
 	}
 	return rset, nil
 }
 
-func (c *Client) Diff(rset1 []*route53.ResourceRecordSet, rset2 []*route53.ResourceRecordSet) []*route53.ResourceRecordSet {
-	var diff []*route53.ResourceRecordSet
-	for _, r1 := range rset1 {
-		exist := false
-		for _, r2 := range rset2 {
-			if aws.StringValue(r1.Name) == aws.StringValue(r2.Name) {
-				exist = true
-				break
+func (c *Client) RecordMap(records []*route53.ResourceRecordSet) map[string]string {
+	recordMap := make(map[string]string)
+
+	for _, record := range records {
+		if (aws.StringValue(record.Type)) == "TXT" {
+			recordMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
+		} else {
+			if _, exist := recordMap[aws.StringValue(record.Name)]; !exist {
+				recordMap[aws.StringValue(record.Name)] = ""
 			}
 		}
-		if !exist {
-			diff = append(diff, r1)
-		}
 	}
-	return diff
+
+	return recordMap
+}
+
+//return the Value of the TXT record as stored
+func (c *Client) GetGroupID() string {
+	return fmt.Sprintf("\"mate:%s\"", c.options.GroupID)
 }
