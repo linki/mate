@@ -9,9 +9,9 @@ import (
 
 	"github.bus.zalan.do/teapot/mate/awsclient"
 	"github.bus.zalan.do/teapot/mate/pkg"
+	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/prometheus/common/log"
 )
 
 // Implementations provide access to AWS Route53 API's
