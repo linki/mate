@@ -79,7 +79,7 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	for _, e := range endpoints {
 		record, exists := currentRecords[e.DNSName]
 
-		if !exists || exists && labelsMatch(record.Rrdatas) {
+		if !exists || exists && isResponsible(record) {
 			records = append(records, e)
 		}
 	}
