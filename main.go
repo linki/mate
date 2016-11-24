@@ -1,22 +1,12 @@
 package main
 
 import (
-	"time"
-
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.bus.zalan.do/teapot/mate/consumers"
 	"github.bus.zalan.do/teapot/mate/controller"
 	"github.bus.zalan.do/teapot/mate/producers"
-)
-
-const (
-	// TODO: to run synchronize form time to time
-	defaultInterval = 10 * time.Minute
-
-	// defaultDomain = "oolong.gcp.zalan.do"
-
 )
 
 var params struct {
