@@ -206,7 +206,7 @@ func isResponsible(record *dns.ResourceRecordSet) bool {
 }
 
 func labelsMatch(labels []string) bool {
-	return labels != nil &&
+	return len(labels) == 2 &&
 		labels[0][1:len(labels[0])-1] == heritageLabel &&
 		labels[1][1:len(labels[1])-1] == labelPrefix+params.recordGroupID
 }
