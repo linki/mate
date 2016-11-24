@@ -5,8 +5,12 @@ import (
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
+	"strings"
+
 	"github.bus.zalan.do/teapot/mate/awsclient"
 	"github.bus.zalan.do/teapot/mate/pkg"
+	log "github.com/Sirupsen/logrus"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 )
 
@@ -14,12 +18,13 @@ import (
 // required calls.
 type AWSClient interface {
 	ListRecordSets() ([]*route53.ResourceRecordSet, error)
-	ChangeRecordSets(upsert, del []*route53.ResourceRecordSet) error
+	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error
 	MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error)
-	Diff(rset1 []*route53.ResourceRecordSet, rset2 []*route53.ResourceRecordSet) []*route53.ResourceRecordSet
+	RecordMap(records []*route53.ResourceRecordSet) map[string]string
+	GetGroupID() string
 }
 
-type aws struct {
+type awsClient struct {
 	client AWSClient
 }
 
@@ -45,32 +50,72 @@ func NewAWSRoute53() (Consumer, error) {
 	})), nil
 }
 
-func withClient(c AWSClient) *aws {
-	return &aws{c}
+func withClient(c AWSClient) *awsClient {
+	return &awsClient{c}
 }
 
-func (a *aws) Sync(endpoints []*pkg.Endpoint) error {
-	current, err := a.client.ListRecordSets()
+func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
+	records, err := a.client.ListRecordSets()
 	if err != nil {
 		return err
 	}
+
+	recordMap := a.client.RecordMap(records)
+
 	next, err := a.client.MapEndpoints(endpoints)
 	if err != nil {
 		return err
 	}
 
-	upsert := next
-	del := a.client.Diff(current, next)
-	if len(upsert) > 0 || len(del) > 0 {
-		return a.client.ChangeRecordSets(upsert, del)
+	var upsert, del []*route53.ResourceRecordSet
+
+	for _, endpoint := range next {
+		groupID, exist := recordMap[aws.StringValue(endpoint.Name)]
+
+		if exist && groupID != a.client.GetGroupID() {
+			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(endpoint.Name), groupID)
+			continue
+		}
+
+		if !exist || (exist && groupID == a.client.GetGroupID()) {
+			upsert = append(upsert, endpoint)
+		}
 	}
+
+	for _, record := range records {
+		groupID := recordMap[aws.StringValue(record.Name)]
+		if groupID == a.client.GetGroupID() {
+			remove := true
+			for _, endpoint := range next {
+				if aws.StringValue(endpoint.Name) == aws.StringValue(record.Name) {
+					remove = false
+				}
+			}
+			if remove {
+				del = append(del, record)
+			}
+		}
+	}
+
+	if len(upsert) > 0 || len(del) > 0 {
+		return a.client.ChangeRecordSets(upsert, del, nil)
+	}
+
+	log.Infoln("No changes submitted")
+
 	return nil
 }
 
-func (a *aws) Process(endpoint *pkg.Endpoint) error {
-	upsert, err := a.client.MapEndpoints([]*pkg.Endpoint{endpoint})
+func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
+	create, err := a.client.MapEndpoints([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
 	}
-	return a.client.ChangeRecordSets(upsert, nil)
+
+	err = a.client.ChangeRecordSets(nil, nil, create)
+	if err != nil && strings.Contains(err.Error(), "it already exists") {
+		log.Warnf("Record [name=%s] could not be created, another record with same name already exists", endpoint.DNSName)
+		return nil
+	}
+	return err
 }

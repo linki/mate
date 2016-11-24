@@ -1,8 +1,6 @@
 package awsclient
 
 import (
-	"fmt"
-
 	"github.bus.zalan.do/teapot/mate/pkg"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -28,9 +26,9 @@ func (c *Client) initRoute53Client() (*route53.Route53, error) {
 	return route53.New(session), nil
 }
 
-//mapEndpointAlias ...
+//MapEndpointAlias ...
 //create an AWS A Alias record
-func mapEndpointAlias(ep *pkg.Endpoint, ttl int64, aliasHostedZoneID *string) *route53.ResourceRecordSet {
+func (c *Client) MapEndpointAlias(ep *pkg.Endpoint, ttl int64, aliasHostedZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
@@ -43,15 +41,15 @@ func mapEndpointAlias(ep *pkg.Endpoint, ttl int64, aliasHostedZoneID *string) *r
 	return rs
 }
 
-//mapEndpointTXT ...
+//MapEndpointTXT ...
 //create an AWS TXT record
-func mapEndpointTXT(ep *pkg.Endpoint, ttl int64, awsGroupID string) *route53.ResourceRecordSet {
+func (c *Client) MapEndpointTXT(ep *pkg.Endpoint, ttl int64) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("TXT"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
 		TTL:  &ttl,
 		ResourceRecords: []*route53.ResourceRecord{{
-			Value: aws.String(getTXTValue(awsGroupID)),
+			Value: aws.String(c.GetGroupID()),
 		}},
 	}
 	return rs
@@ -66,35 +64,6 @@ func mapChanges(action string, rsets []*route53.ResourceRecordSet) []*route53.Ch
 		})
 	}
 	return changes
-}
-
-//filter out to include only mate created resource A and TXT records with the right group id
-func (c *Client) filterByGroupID(rsets []*route53.ResourceRecordSet) []*route53.ResourceRecordSet {
-	var hostnames []string
-	var res []*route53.ResourceRecordSet
-	for _, rs := range rsets {
-		if aws.StringValue(rs.Type) == "TXT" && len(rs.ResourceRecords) == 1 {
-			resource := rs.ResourceRecords[0]
-			if aws.StringValue(resource.Value) == getTXTValue(c.options.GroupID) {
-				hostnames = append(hostnames, *rs.Name)
-				res = append(res, rs)
-			}
-		}
-	}
-	for _, rs := range rsets {
-		if aws.StringValue(rs.Type) != "A" {
-			continue
-		}
-		name := aws.StringValue(rs.Name)
-		include := false
-		for _, hostname := range hostnames {
-			include = include || (pkg.SanitizeDNSName(name) == pkg.SanitizeDNSName(hostname))
-		}
-		if include {
-			res = append(res, rs)
-		}
-	}
-	return res
 }
 
 func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
@@ -118,9 +87,4 @@ func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
 	}
 
 	return zoneID, nil
-}
-
-//return the Value of the TXT record as stored
-func getTXTValue(groupID string) string {
-	return fmt.Sprintf("\"mate:%s\"", groupID)
 }

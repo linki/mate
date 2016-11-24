@@ -24,6 +24,7 @@ var params struct {
 	consumer string
 	sync     bool
 	debug    bool
+	syncOnly bool
 }
 
 var version = "Unknown"
@@ -33,6 +34,7 @@ func init() {
 	kingpin.Flag("consumer", "The endpoints consumer to use.").Required().StringVar(&params.consumer)
 	kingpin.Flag("sync", "Keep hosted zone in sync and remove records that don't belong to a service.").BoolVar(&params.sync)
 	kingpin.Flag("debug", "Enable debug logging.").BoolVar(&params.debug)
+	kingpin.Flag("sync-only", "Disable event watcher").BoolVar(&params.syncOnly)
 }
 
 func main() {
@@ -62,9 +64,11 @@ func main() {
 		}
 	}
 
-	err = ctrl.Watch()
-	if err != nil {
-		log.Fatalln(err)
+	if !params.syncOnly {
+		err = ctrl.Watch()
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 
 	ctrl.Wait()
