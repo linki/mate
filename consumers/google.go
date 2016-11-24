@@ -72,19 +72,14 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	log.Debugln("Current records:")
 	d.printRecords(currentRecords)
 
-	allRecords, err := d.allRecords()
-	if err != nil {
-		return err
-	}
-
 	change := new(dns.Change)
 
 	records := make([]*pkg.Endpoint, 0)
 
 	for _, e := range endpoints {
-		labels, exists := allRecords[e.DNSName]
+		record, exists := currentRecords[e.DNSName]
 
-		if !exists || exists && labelsMatch(labels) {
+		if !exists || exists && labelsMatch(record.Rrdatas) {
 			records = append(records, e)
 		}
 	}
@@ -107,20 +102,22 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	}
 
 	for _, r := range currentRecords {
-		change.Deletions = append(change.Deletions,
-			&dns.ResourceRecordSet{
-				Name:    r.Name,
-				Rrdatas: r.Rrdatas,
-				Ttl:     r.Ttl,
-				Type:    r.Type,
-			},
-			&dns.ResourceRecordSet{
-				Name:    r.Name,
-				Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
-				Ttl:     r.Ttl,
-				Type:    "TXT",
-			},
-		)
+		if isResponsible(r) {
+			change.Deletions = append(change.Deletions,
+				&dns.ResourceRecordSet{
+					Name:    r.Name,
+					Rrdatas: r.Rrdatas,
+					Ttl:     r.Ttl,
+					Type:    r.Type,
+				},
+				&dns.ResourceRecordSet{
+					Name:    r.Name,
+					Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+					Ttl:     r.Ttl,
+					Type:    "TXT",
+				},
+			)
+		}
 	}
 
 	err = d.applyChange(change)
@@ -175,40 +172,17 @@ func (d *googleDNSConsumer) applyChange(change *dns.Change) error {
 	return nil
 }
 
-func (d *googleDNSConsumer) currentRecords() ([]*dns.ResourceRecordSet, error) {
+func (d *googleDNSConsumer) currentRecords() (map[string]*dns.ResourceRecordSet, error) {
 	resp, err := d.client.ResourceRecordSets.List(params.project, params.zone).Do()
 	if err != nil {
 		return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", params.project, params.zone, err)
 	}
 
-	allRecords := make([]*dns.ResourceRecordSet, 0)
-	for _, r := range resp.Rrsets {
-		if r.Type == "A" || r.Type == "TXT" {
-			allRecords = append(allRecords, r)
-		}
-	}
-
-	records := make([]*dns.ResourceRecordSet, 0)
-	for _, r := range allRecords {
-		if r.Type == "A" && isResponsible(allRecords, r) {
-			records = append(records, r)
-		}
-	}
-
-	return records, nil
-}
-
-func (d *googleDNSConsumer) allRecords() (map[string][]string, error) {
-	resp, err := d.client.ResourceRecordSets.List(params.project, params.zone).Do()
-	if err != nil {
-		return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", params.project, params.zone, err)
-	}
-
-	records := map[string][]string{}
+	records := make(map[string]*dns.ResourceRecordSet)
 
 	for _, r := range resp.Rrsets {
 		if r.Type == "TXT" {
-			records[r.Name] = r.Rrdatas
+			records[r.Name] = r
 		} else {
 			if _, exists := records[r.Name]; !exists {
 				records[r.Name] = nil
@@ -219,22 +193,16 @@ func (d *googleDNSConsumer) allRecords() (map[string][]string, error) {
 	return records, nil
 }
 
-func (d *googleDNSConsumer) printRecords(records []*dns.ResourceRecordSet) {
+func (d *googleDNSConsumer) printRecords(records map[string]*dns.ResourceRecordSet) {
 	for _, r := range records {
-		log.Debugln(" ", r.Name, r.Type, r.Rrdatas)
+		if isResponsible(r) {
+			log.Debugln(" ", r.Name, r.Type, r.Rrdatas)
+		}
 	}
 }
 
-func isResponsible(records []*dns.ResourceRecordSet, record *dns.ResourceRecordSet) bool {
-	for _, r := range records {
-		if record.Name == r.Name && r.Type == "TXT" {
-			if labelsMatch(r.Rrdatas) {
-				return true
-			}
-		}
-	}
-
-	return false
+func isResponsible(record *dns.ResourceRecordSet) bool {
+	return record != nil && labelsMatch(record.Rrdatas)
 }
 
 func labelsMatch(labels []string) bool {
