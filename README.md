@@ -35,6 +35,7 @@ Mate supports swapping out Endpoint producers (e.g. a service list from Kubernet
 
 ### Consumers
 * `Google`: listens for endpoints and creates Google Cloud DNS entries accordingly
+* `AWS`   : listens for endpoints and creates AWS Route53 DNS entries 
 * `Stdout`: listens for endpoints and prints them to Stdout
 
 You can choose any combination. `Kubernetes` + `Stdout` is useful for testing your service watching functionality, whereas `Fake` + `Google` is useful for testing that you create the correct records in GCP.
