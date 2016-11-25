@@ -54,10 +54,7 @@ func getELBZoneID(ep *pkg.Endpoint, elbs []*elb.LoadBalancerDescription) *string
 }
 
 func extractELBName(dns string) string {
-	isInternal := strings.Index(dns, "internal-") == 0
-	if isInternal {
-		dns = dns[9:]
-	}
+	dns = strings.TrimPrefix(dns, "internal-") // internal elb
 	lastLvlDomain := dns[:strings.Index(dns, ".")]
 	timestampIndex := strings.LastIndex(lastLvlDomain, "-")
 	return dns[:timestampIndex]
