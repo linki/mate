@@ -10,11 +10,11 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/watch"
 
 	"github.bus.zalan.do/teapot/mate/pkg"
-	"github.bus.zalan.do/teapot/pkg/kubernetes"
 )
 
 const (
@@ -40,7 +40,12 @@ func NewKubernetes() (*kubernetesProducer, error) {
 		return nil, errors.New("Please provide --kubernetes-domain")
 	}
 
-	client := kubernetes.NewHealthyClient(params.kubeServer)
+	client, err := unversioned.New(&restclient.Config{
+		Host: params.kubeServer.String(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create Kubernetes API client: %v", err)
+	}
 
 	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
 		"trimPrefix": strings.TrimPrefix,
