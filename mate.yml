@@ -1,0 +1,29 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: mate
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mate
+    spec:
+      containers:
+      - name: mate
+        image: registry.opensource.zalan.do/teapot/mate:v0.0.7
+        args:
+        - --producer=kubernetes
+        - --kubernetes-domain=example.org.
+        - --kubernetes-format={{.Namespace}}-{{.Name}}
+        - --consumer=google
+        - --google-project=my-project
+        - --google-zone=example-org
+        - --google-record-group-id=my-cluster
+      - name: kubectl
+        image: quay.io/coreos/hyperkube:v1.4.5_coreos.0
+        command:
+        - /hyperkube
+        args:
+        - kubectl
+        - proxy
