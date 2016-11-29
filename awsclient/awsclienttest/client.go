@@ -33,8 +33,8 @@ func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRec
 	var rset []*route53.ResourceRecordSet
 	aliasZoneID := "test"
 	for _, ep := range endpoints {
-		rset = append(rset, c.Client.MapEndpointAlias(ep, int64(c.Options.RecordSetTTL), &aliasZoneID))
-		rset = append(rset, c.Client.MapEndpointTXT(ep, int64(c.Options.RecordSetTTL)))
+		rset = append(rset, c.Client.MapEndpointAlias(ep, &aliasZoneID))
+		rset = append(rset, c.Client.MapEndpointTXT(ep))
 	}
 	return rset, nil
 }

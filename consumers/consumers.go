@@ -14,7 +14,6 @@ var params struct {
 	awsAccountID  string
 	awsRole       string
 	awsHostedZone string
-	awsTTL        int
 	awsGroupID    string
 }
 

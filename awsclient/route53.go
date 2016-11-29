@@ -9,6 +9,7 @@ import (
 
 var (
 	EvaluateTargetHealth = true
+	defaultTxtTTL        = int64(300)
 )
 
 func (c *Client) initRoute53Client() (*route53.Route53, error) {
@@ -28,7 +29,7 @@ func (c *Client) initRoute53Client() (*route53.Route53, error) {
 
 //MapEndpointAlias ...
 //create an AWS A Alias record
-func (c *Client) MapEndpointAlias(ep *pkg.Endpoint, ttl int64, aliasHostedZoneID *string) *route53.ResourceRecordSet {
+func (c *Client) MapEndpointAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
@@ -43,11 +44,11 @@ func (c *Client) MapEndpointAlias(ep *pkg.Endpoint, ttl int64, aliasHostedZoneID
 
 //MapEndpointTXT ...
 //create an AWS TXT record
-func (c *Client) MapEndpointTXT(ep *pkg.Endpoint, ttl int64) *route53.ResourceRecordSet {
+func (c *Client) MapEndpointTXT(ep *pkg.Endpoint) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("TXT"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
-		TTL:  &ttl,
+		TTL:  aws.Int64(defaultTxtTTL),
 		ResourceRecords: []*route53.ResourceRecord{{
 			Value: aws.String(c.GetGroupID()),
 		}},

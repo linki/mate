@@ -8,7 +8,6 @@ import (
 
 var (
 	zoneID = "ABCDEFG"
-	ttl    = int64(300)
 )
 
 func TestMapEndpointAlias(t *testing.T) {
@@ -19,7 +18,7 @@ func TestMapEndpointAlias(t *testing.T) {
 		IP:       "10.202.10.123",
 		Hostname: "amazon.elb.com",
 	}
-	rsA := client.MapEndpointAlias(ep, ttl, &zoneID)
+	rsA := client.MapEndpointAlias(ep, &zoneID)
 	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
 		*rsA.AliasTarget.DNSName != ep.Hostname ||
 		*rsA.AliasTarget.HostedZoneId != zoneID {
@@ -35,7 +34,7 @@ func TestMapEndpointTXT(t *testing.T) {
 		IP:       "10.202.10.123",
 		Hostname: "amazon.elb.com",
 	}
-	rsTXT := client.MapEndpointTXT(ep, ttl)
+	rsTXT := client.MapEndpointTXT(ep)
 	if *rsTXT.Type != "TXT" ||
 		*rsTXT.Name != "example.com." ||
 		len(rsTXT.ResourceRecords) != 1 ||
