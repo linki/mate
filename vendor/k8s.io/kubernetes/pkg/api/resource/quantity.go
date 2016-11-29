@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors All rights reserved.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ type Quantity struct {
 	// d is the quantity in inf.Dec form if d.Dec != nil
 	d infDecAmount
 	// s is the generated value of this quantity to avoid recalculation
-	s []byte
+	s string
 
 	// Change Format at will. See the comment for Canonicalize for
 	// more details.
@@ -259,7 +259,6 @@ Suffix:
 		switch str[i] {
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		default:
-			pos = i
 			break Suffix
 		}
 	}
@@ -275,7 +274,7 @@ func ParseQuantity(str string) (Quantity, error) {
 		return Quantity{}, ErrFormatWrong
 	}
 	if str == "0" {
-		return Quantity{Format: DecimalSI}, nil
+		return Quantity{Format: DecimalSI, s: str}, nil
 	}
 
 	positive, value, num, denom, suf, err := parseQuantityString(str)
@@ -323,6 +322,17 @@ func ParseQuantity(str string) (Quantity, error) {
 			if result, ok := int64Multiply(value, int64(mantissa)); ok {
 				if !positive {
 					result = -result
+				}
+				// if the number is in canonical form, reuse the string
+				switch format {
+				case BinarySI:
+					if exponent%10 == 0 && (value&0x07 != 0) {
+						return Quantity{i: int64Amount{value: result, scale: Scale(scale)}, Format: format, s: str}, nil
+					}
+				default:
+					if scale%3 == 0 && !strings.HasSuffix(shifted, "000") && shifted[0] != '0' {
+						return Quantity{i: int64Amount{value: result, scale: Scale(scale)}, Format: format, s: str}, nil
+					}
 				}
 				return Quantity{i: int64Amount{value: result, scale: Scale(scale)}, Format: format}, nil
 			}
@@ -375,7 +385,17 @@ func ParseQuantity(str string) (Quantity, error) {
 	return Quantity{d: infDecAmount{amount}, Format: format}, nil
 }
 
-// Canonicalize returns the canonical form of q and its suffix (see comment on Quantity).
+// DeepCopy returns a deep-copy of the Quantity value.  Note that the method
+// receiver is a value, so we can mutate it in-place and return it.
+func (q Quantity) DeepCopy() Quantity {
+	if q.d.Dec != nil {
+		tmp := &inf.Dec{}
+		q.d.Dec = tmp.Set(q.d.Dec)
+	}
+	return q
+}
+
+// CanonicalizeBytes returns the canonical form of q and its suffix (see comment on Quantity).
 //
 // Note about BinarySI:
 // * If q.Format is set to BinarySI and q.Amount represents a non-zero value between
@@ -490,10 +510,16 @@ func (q *Quantity) AsScale(scale Scale) (CanonicalValue, bool) {
 // Negative numbers are rounded away from zero (-9 scale 1 rounds to -10).
 func (q *Quantity) RoundUp(scale Scale) bool {
 	if q.d.Dec != nil {
+		q.s = ""
 		d, exact := q.d.AsScale(scale)
 		q.d = d
 		return exact
 	}
+	// avoid clearing the string value if we have already calculated it
+	if q.i.scale >= scale {
+		return true
+	}
+	q.s = ""
 	i, exact := q.i.AsScale(scale)
 	q.i = i
 	return exact
@@ -502,7 +528,7 @@ func (q *Quantity) RoundUp(scale Scale) bool {
 // Add adds the provide y quantity to the current value. If the current value is zero,
 // the format of the quantity will be updated to the format of y.
 func (q *Quantity) Add(y Quantity) {
-	q.s = nil
+	q.s = ""
 	if q.d.Dec == nil && y.d.Dec == nil {
 		if q.i.value == 0 {
 			q.Format = y.Format
@@ -519,7 +545,7 @@ func (q *Quantity) Add(y Quantity) {
 // Sub subtracts the provided quantity from the current value in place. If the current
 // value is zero, the format of the quantity will be updated to the format of y.
 func (q *Quantity) Sub(y Quantity) {
-	q.s = nil
+	q.s = ""
 	if q.IsZero() {
 		q.Format = y.Format
 	}
@@ -549,7 +575,7 @@ func (q *Quantity) CmpInt64(y int64) int {
 
 // Neg sets quantity to be the negative value of itself.
 func (q *Quantity) Neg() {
-	q.s = nil
+	q.s = ""
 	if q.d.Dec == nil {
 		q.i.value = -q.i.value
 		return
@@ -557,31 +583,26 @@ func (q *Quantity) Neg() {
 	q.d.Dec.Neg(q.d.Dec)
 }
 
-// toBytes ensures q.s is set to a byte slice representing the canonical string form of this
-// quantity and then returns the value. CanonicalizeBytes is an expensive operation, and caching
-// this result significantly reduces the cost of normal parse / marshal operations on Quantity.
-func (q *Quantity) toBytes() []byte {
-	if q.s == nil {
-		result := make([]byte, 0, int64QuantityExpectedBytes)
-		number, suffix := q.CanonicalizeBytes(result)
-		number = append(number, suffix...)
-		q.s = number
-	}
-	return q.s
-}
-
 // int64QuantityExpectedBytes is the expected width in bytes of the canonical string representation
 // of most Quantity values.
 const int64QuantityExpectedBytes = 18
 
-// String formats the Quantity as a string.
+// String formats the Quantity as a string, caching the result if not calculated.
+// String is an expensive operation and caching this result significantly reduces the cost of
+// normal parse / marshal operations on Quantity.
 func (q *Quantity) String() string {
-	return string(q.toBytes())
+	if len(q.s) == 0 {
+		result := make([]byte, 0, int64QuantityExpectedBytes)
+		number, suffix := q.CanonicalizeBytes(result)
+		number = append(number, suffix...)
+		q.s = string(number)
+	}
+	return q.s
 }
 
 // MarshalJSON implements the json.Marshaller interface.
 func (q Quantity) MarshalJSON() ([]byte, error) {
-	if q.s != nil {
+	if len(q.s) > 0 {
 		out := make([]byte, len(q.s)+2)
 		out[0], out[len(out)-1] = '"', '"'
 		copy(out[1:], q.s)
@@ -607,6 +628,7 @@ func (q Quantity) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements the json.Unmarshaller interface.
+// TODO: Remove support for leading/trailing whitespace
 func (q *Quantity) UnmarshalJSON(value []byte) error {
 	l := len(value)
 	if l == 4 && bytes.Equal(value, []byte("null")) {
@@ -614,17 +636,15 @@ func (q *Quantity) UnmarshalJSON(value []byte) error {
 		q.i = int64Amount{}
 		return nil
 	}
-	if l < 2 {
-		return ErrFormatWrong
-	}
-	if value[0] == '"' && value[l-1] == '"' {
+	if l >= 2 && value[0] == '"' && value[l-1] == '"' {
 		value = value[1 : l-1]
 	}
-	parsed, err := ParseQuantity(string(value))
+
+	parsed, err := ParseQuantity(strings.TrimSpace(string(value)))
 	if err != nil {
 		return err
 	}
-	parsed.s = value
+
 	// This copy is safe because parsed will not be referred to again.
 	*q = parsed
 	return nil
@@ -693,7 +713,7 @@ func (q *Quantity) SetMilli(value int64) {
 
 // SetScaled sets q's value to be value * 10^scale
 func (q *Quantity) SetScaled(value int64, scale Scale) {
-	q.s = nil
+	q.s = ""
 	q.d.Dec = nil
 	q.i = int64Amount{value: value, scale: scale}
 }
