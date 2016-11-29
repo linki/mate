@@ -13,7 +13,6 @@ import (
 
 const (
 	defaultSessionDuration = 30 * time.Minute
-	defaultTTL             = 300
 )
 
 // TODO: move to somewhere
@@ -28,10 +27,9 @@ func (l defaultLog) Infoln(args ...interface{}) {
 }
 
 type Options struct {
-	HostedZone   string
-	RecordSetTTL int
-	Log          Logger
-	GroupID      string
+	HostedZone string
+	Log        Logger
+	GroupID    string
 }
 
 type Client struct {
@@ -41,9 +39,6 @@ type Client struct {
 var ErrInvalidAWSResponse = errors.New("invalid AWS response")
 
 func New(o Options) *Client {
-	if o.RecordSetTTL <= 0 {
-		o.RecordSetTTL = defaultTTL
-	}
 
 	if o.Log == nil {
 		o.Log = defaultLog{}
@@ -120,8 +115,8 @@ func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRec
 
 	for _, ep := range endpoints {
 		aliasZoneID := getELBZoneID(ep, elbs)
-		rset = append(rset, c.MapEndpointAlias(ep, int64(c.options.RecordSetTTL), aliasZoneID))
-		rset = append(rset, c.MapEndpointTXT(ep, int64(c.options.RecordSetTTL)))
+		rset = append(rset, c.MapEndpointAlias(ep, aliasZoneID))
+		rset = append(rset, c.MapEndpointTXT(ep))
 	}
 	return rset, nil
 }

@@ -30,7 +30,6 @@ type awsClient struct {
 
 func init() {
 	kingpin.Flag("aws-hosted-zone", "The hosted zone name for the AWS consumer (required with AWS).").StringVar(&params.awsHostedZone)
-	kingpin.Flag("aws-record-set-ttl", "TTL for the record sets created by the AWS consumer.").IntVar(&params.awsTTL)
 	kingpin.Flag("aws-record-group-id", "Identifier to filter the mate records ").StringVar(&params.awsGroupID)
 }
 
@@ -44,9 +43,8 @@ func NewAWSRoute53() (Consumer, error) {
 		return nil, errors.New("please provide --aws-record-group-id")
 	}
 	return withClient(awsclient.New(awsclient.Options{
-		HostedZone:   params.awsHostedZone,
-		RecordSetTTL: params.awsTTL,
-		GroupID:      params.awsGroupID,
+		HostedZone: params.awsHostedZone,
+		GroupID:    params.awsGroupID,
 	})), nil
 }
 
