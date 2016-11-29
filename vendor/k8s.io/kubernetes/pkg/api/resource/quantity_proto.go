@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ func (m *Quantity) MarshalTo(data []byte) (int, error) {
 	data[i] = 0xa
 	i++
 	// BEGIN CUSTOM MARSHAL
-	out := m.toBytes()
+	out := m.String()
 	i = encodeVarintGenerated(data, i, uint64(len(out)))
 	i += copy(data[i:], out)
 	// END CUSTOM MARSHAL
@@ -69,7 +69,7 @@ func (m *Quantity) Size() (n int) {
 	_ = l
 
 	// BEGIN CUSTOM SIZE
-	l = len(m.toBytes())
+	l = len(m.String())
 	// END CUSTOM SIZE
 
 	n += 1 + l + sovGenerated(uint64(l))
