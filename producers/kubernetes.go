@@ -10,6 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/watch"
@@ -62,6 +63,8 @@ func NewKubernetes() (*kubernetesProducer, error) {
 }
 
 func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
+	ret := make([]*pkg.Endpoint, 0)
+
 	allServices, err := a.client.Services(api.NamespaceAll).List(api.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve list of services: %v", err)
@@ -69,7 +72,6 @@ func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 
 	log.Debugln("Current services and their endpoints:")
 	log.Debugln("=====================================")
-	ret := make([]*pkg.Endpoint, 0, len(allServices.Items))
 	for _, svc := range allServices.Items {
 		if valid, problem := validateService(svc); !valid {
 			log.Warnln(problem)
@@ -85,13 +87,77 @@ func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 		ret = append(ret, ep)
 	}
 
+	allIngress, err := a.client.Ingress(api.NamespaceAll).List(api.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("Unable to retrieve list of ingress: %v", err)
+	}
+
+	log.Debugln("Current ingress and their endpoints:")
+	log.Debugln("=====================================")
+	for _, ing := range allIngress.Items {
+		if valid, problem := validateIngress(ing); !valid {
+			log.Warnln(problem)
+			continue
+		}
+
+		eps, err := a.convertIngressToEndpoint(ing)
+		if err != nil {
+			// TODO: consider allowing the service continue running and just log this error
+			return nil, err
+		}
+
+		ret = append(ret, eps...)
+	}
+
 	return ret, nil
 }
 
 func (a *kubernetesProducer) StartWatch() error {
-	w, err := a.client.Services(api.NamespaceAll).Watch(api.ListOptions{})
+	go func() error {
+		w, err := a.client.Services(api.NamespaceAll).Watch(api.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("Unable to watch list of services: %v", err)
+		}
+
+		for event := range w.ResultChan() {
+			if event.Type == watch.Error {
+				// TODO: consider allowing the service continue running and just log this error
+				return fmt.Errorf("Event listener received an error, terminating: %v", event)
+			}
+
+			if event.Type != watch.Added && event.Type != watch.Modified {
+				continue
+			}
+
+			svc, ok := event.Object.(*api.Service)
+			if !ok {
+				// If the object wasn't a Service we can safely ignore it
+				log.Printf("Cannot cast object to service: %v", svc)
+				continue
+			}
+
+			log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
+
+			if valid, problem := validateService(*svc); !valid {
+				log.Println(problem)
+				continue
+			}
+
+			ep, err := a.convertToEndpoint(*svc)
+			if err != nil {
+				// TODO: consider letting the service continue running and just log this error
+				return err
+			}
+
+			a.channel <- ep
+		}
+
+		return pkg.ErrEventChannelClosed
+	}()
+
+	w, err := a.client.Ingress(api.NamespaceAll).Watch(api.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("Unable to watch list of services: %v", err)
+		return fmt.Errorf("Unable to watch list of ingress: %v", err)
 	}
 
 	for event := range w.ResultChan() {
@@ -104,27 +170,29 @@ func (a *kubernetesProducer) StartWatch() error {
 			continue
 		}
 
-		svc, ok := event.Object.(*api.Service)
+		ing, ok := event.Object.(*extensions.Ingress)
 		if !ok {
 			// If the object wasn't a Service we can safely ignore it
-			log.Printf("Cannot cast object to service: %v", svc)
+			log.Printf("Cannot cast object to ingress: %v", ing)
 			continue
 		}
 
-		log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
+		log.Printf("%s: %s/%s", event.Type, ing.Namespace, ing.Name)
 
-		if valid, problem := validateService(*svc); !valid {
+		if valid, problem := validateIngress(*ing); !valid {
 			log.Println(problem)
 			continue
 		}
 
-		ep, err := a.convertToEndpoint(*svc)
+		eps, err := a.convertIngressToEndpoint(*ing)
 		if err != nil {
 			// TODO: consider letting the service continue running and just log this error
 			return err
 		}
 
-		a.channel <- ep
+		for _, ep := range eps {
+			a.channel <- ep
+		}
 	}
 
 	return pkg.ErrEventChannelClosed
@@ -176,4 +244,45 @@ func (a *kubernetesProducer) convertToEndpoint(svc api.Service) (*pkg.Endpoint, 
 	}
 
 	return ep, nil
+}
+
+func validateIngress(ing extensions.Ingress) (bool, string) {
+	switch {
+	case len(ing.Status.LoadBalancer.Ingress) == 0:
+		return false, fmt.Sprintf(
+			"The load balancer of ingress '%s/%s' does not have any ingress.",
+			ing.Namespace, ing.Name,
+		)
+	case len(ing.Status.LoadBalancer.Ingress) > 1:
+		// TODO(linki): in case we have multiple ingress we can just create multiple A or CNAME records
+		return false, fmt.Sprintf(
+			"Cannot register ingress '%s/%s'. More than one ingress is not supported",
+			ing.Namespace, ing.Name,
+		)
+	}
+
+	return true, ""
+}
+
+func (a *kubernetesProducer) convertIngressToEndpoint(ing extensions.Ingress) ([]*pkg.Endpoint, error) {
+	ret := make([]*pkg.Endpoint, 0, len(ing.Spec.Rules))
+
+	for _, rule := range ing.Spec.Rules {
+		ep := &pkg.Endpoint{}
+
+		for _, i := range ing.Status.LoadBalancer.Ingress {
+			ep.IP = i.IP
+			ep.Hostname = i.Hostname
+
+			// take the first entry and exit
+			// TODO(linki): we could easily return a list of endpoints
+			break
+		}
+
+		ep.DNSName = rule.Host + "."
+
+		ret = append(ret, ep)
+	}
+
+	return ret, nil
 }
