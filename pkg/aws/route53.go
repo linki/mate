@@ -1,4 +1,4 @@
-package awsclient
+package aws
 
 import (
 	"github.bus.zalan.do/teapot/mate/pkg"

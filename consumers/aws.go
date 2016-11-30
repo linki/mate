@@ -7,8 +7,8 @@ import (
 
 	"strings"
 
-	"github.bus.zalan.do/teapot/mate/awsclient"
 	"github.bus.zalan.do/teapot/mate/pkg"
+	awsclient "github.bus.zalan.do/teapot/mate/pkg/aws"
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"

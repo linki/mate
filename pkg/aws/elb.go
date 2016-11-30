@@ -1,4 +1,4 @@
-package awsclient
+package aws
 
 import (
 	"strings"

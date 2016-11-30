@@ -3,9 +3,9 @@ package consumers
 import (
 	"testing"
 
-	"github.bus.zalan.do/teapot/mate/awsclient"
-	"github.bus.zalan.do/teapot/mate/awsclient/awsclienttest"
 	"github.bus.zalan.do/teapot/mate/pkg"
+	awsclient "github.bus.zalan.do/teapot/mate/pkg/aws"
+	awstest "github.bus.zalan.do/teapot/mate/pkg/aws/test"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 )
@@ -71,12 +71,12 @@ func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*route53.Res
 func testAWSConsumer(t *testing.T, ti awsTestItem) {
 
 	groupID := "testing-group-id"
-	client := &awsclienttest.Client{
+	client := &awstest.Client{
 		Current: ti.init,
 		Client: awsclient.New(awsclient.Options{
 			GroupID: groupID,
 		}),
-		Options: awsclienttest.Options{
+		Options: awstest.Options{
 			HostedZone:   "test",
 			RecordSetTTL: 10,
 			GroupID:      groupID,
