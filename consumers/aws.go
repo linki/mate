@@ -7,11 +7,11 @@ import (
 
 	"strings"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
-	awsclient "github.bus.zalan.do/teapot/mate/pkg/aws"
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/zalando-incubator/mate/pkg"
+	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 )
 
 // Implementations provide access to AWS Route53 API's

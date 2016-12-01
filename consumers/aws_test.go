@@ -3,11 +3,11 @@ package consumers
 import (
 	"testing"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
-	awsclient "github.bus.zalan.do/teapot/mate/pkg/aws"
-	awstest "github.bus.zalan.do/teapot/mate/pkg/aws/test"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/zalando-incubator/mate/pkg"
+	awsclient "github.com/zalando-incubator/mate/pkg/aws"
+	awstest "github.com/zalando-incubator/mate/pkg/aws/test"
 )
 
 type awsTestItem struct {

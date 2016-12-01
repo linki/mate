@@ -3,9 +3,9 @@ package test
 import (
 	"errors"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
-	awsclient "github.bus.zalan.do/teapot/mate/pkg/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/zalando-incubator/mate/pkg"
+	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 )
 
 type Options struct {

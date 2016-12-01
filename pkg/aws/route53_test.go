@@ -3,7 +3,7 @@ package aws
 import (
 	"testing"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
+	"github.com/zalando-incubator/mate/pkg"
 )
 
 var (

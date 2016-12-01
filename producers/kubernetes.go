@@ -14,7 +14,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/watch"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
+	"github.com/zalando-incubator/mate/pkg"
 )
 
 const (

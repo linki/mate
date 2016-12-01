@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
+	"github.com/zalando-incubator/mate/pkg"
 )
 
 var params struct {

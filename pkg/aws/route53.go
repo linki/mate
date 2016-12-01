@@ -1,10 +1,10 @@
 package aws
 
 import (
-	"github.bus.zalan.do/teapot/mate/pkg"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/zalando-incubator/mate/pkg"
 )
 
 var (
