@@ -4,9 +4,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	"github.bus.zalan.do/teapot/mate/consumers"
-	"github.bus.zalan.do/teapot/mate/controller"
-	"github.bus.zalan.do/teapot/mate/producers"
+	"github.com/zalando-incubator/mate/consumers"
+	"github.com/zalando-incubator/mate/controller"
+	"github.com/zalando-incubator/mate/producers"
 )
 
 var params struct {

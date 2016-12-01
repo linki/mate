@@ -3,10 +3,10 @@ package awsclient
 import (
 	"strings"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elb"
+	"github.com/zalando-incubator/mate/pkg"
 )
 
 func (c *Client) initELBClient() (*elb.ELB, error) {

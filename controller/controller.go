@@ -7,9 +7,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.bus.zalan.do/teapot/mate/consumers"
-	"github.bus.zalan.do/teapot/mate/pkg"
-	"github.bus.zalan.do/teapot/mate/producers"
+	"github.com/zalando-incubator/mate/consumers"
+	"github.com/zalando-incubator/mate/pkg"
+	"github.com/zalando-incubator/mate/producers"
 )
 
 const (

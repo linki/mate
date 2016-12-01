@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
+	"github.com/zalando-incubator/mate/pkg"
 )
 
 func TestFakeReturnsTenEndpoints(t *testing.T) {

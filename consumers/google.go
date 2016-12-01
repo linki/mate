@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
+	"github.com/zalando-incubator/mate/pkg"
 
 	log "github.com/Sirupsen/logrus"
 	"golang.org/x/net/context"

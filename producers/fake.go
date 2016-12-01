@@ -9,7 +9,7 @@ import (
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
-	"github.bus.zalan.do/teapot/mate/pkg"
+	"github.com/zalando-incubator/mate/pkg"
 )
 
 const (
