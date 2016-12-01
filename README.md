@@ -4,15 +4,25 @@ Mate synchronizes AWS Route53 or Google CloudDNS records with exposed Kubernetes
 
 # Purpose
 
-When creating services with `Type=LoadBalancer` AWS/Google will provision an external load balancer to forward traffic to your service. Depending on a cloud provider this load balancer will get a random public IP or DNS name but no defined DNS record to point to it.
+When creating services with `Type=LoadBalancer` Kubernetes provisions an external load balancer to forward traffic to your service. Depending on the cloud provider this load balancer will get a random public IP or DNS name but no defined DNS record to point to it.
 
-Mate bridges this gap and syncs DNS records based on the service's name and/or namespace. This allows services to be seamlessly discovered even if load balancers change.
+Mate bridges this gap and synchronizes DNS records based on the service's name and/or namespace. This allows services to be seamlessly discovered even if the load balancer address changes.
 
 # Install
 
-go get it
+```
+go get github.com/zalando-incubator/mate
+```
+
+or
+
+```
+docker run registry.opensource.zalan.do/teapot/mate:v0.0.7 --help
+```
 
 # Usage
+
+Depending on the cloud provider the invocation differs slightly
 
 ### AWS
 
@@ -25,6 +35,7 @@ $ mate \
     --aws-hosted-zone=example.com. \
     --aws-record-group-id=foo
 ```
+
 For each exposed service Mate will create two records in Route53: 
 
 1. A record - Alias to the ELB with the name inferred from `kubernetes-format` and `kubernetes-domain`. So if you create an nginx service named `my-nginx` in `default` namespace and domain `example.com` registered record will have a hostname `default-my-nginx.example.com`. 
@@ -53,7 +64,7 @@ Mate will listen for events from Kubernetes API Server and create corresponding 
 
 # Producers and Consumers
 
-Mate supports swapping out Endpoint producers (e.g. a service list from Kubernetes) and endpoint consumers (e.g. making API calls to Google to create DNS records) and both sides are pluggable. There currently exist four implementations, two for each side.
+Mate supports swapping out Endpoint producers (e.g. a service list from Kubernetes) and endpoint consumers (e.g. making API calls to Google to create DNS records) and both sides are pluggable. There currently exist two producer and three consumer implementations.
 
 ### Producers
 
@@ -62,7 +73,7 @@ Mate supports swapping out Endpoint producers (e.g. a service list from Kubernet
 
 ### Consumers
 
-* `Google`: listens for endpoints and creates Google Cloud DNS entries accordingly
+* `Google`: listens for endpoints and creates Google CloudDNS entries accordingly
 * `AWS`   : listens for endpoints and creates AWS Route53 DNS entries 
 * `Stdout`: listens for endpoints and prints them to Stdout
 
@@ -72,3 +83,27 @@ You can choose any combination. `Kubernetes` + `Stdout` is useful for testing yo
 
 * Mate currently only supports Service objects that use `Type=LoadBalancer`, i.e. `Ingress` is not supported.
 * Although the modular design allows to specify it, you currently cannot create DNS records on Google CloudDNS for a cluster running on AWS because AWS ELBs will send ELB endpoints in the form of DNS names whereas the Google consumer expects them to be IPs and vice versa.
+
+# License
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Zalando SE
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
