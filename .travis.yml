@@ -1,7 +1,6 @@
 dist: trusty
 
 os:
-  - osx
   - linux
 
 language: go
