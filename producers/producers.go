@@ -2,22 +2,15 @@ package producers
 
 import (
 	"fmt"
-	"net/url"
 
 	"github.com/zalando-incubator/mate/pkg"
+	"github.com/zalando-incubator/mate/producers/kubernetes"
 )
 
 var params struct {
 	dnsName      string
 	mode         string
 	targetDomain string
-
-	project string
-	zone    string
-	domain  string
-
-	kubeServer *url.URL
-	format     string
 }
 
 type Producer interface {
@@ -29,7 +22,7 @@ type Producer interface {
 func New(name string) (Producer, error) {
 	switch name {
 	case "kubernetes":
-		return NewKubernetes()
+		return kubernetes.NewProducer()
 	case "fake":
 		return NewFake()
 	}
