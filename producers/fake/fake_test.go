@@ -1,4 +1,4 @@
-package producers
+package fake
 
 import (
 	"net"
