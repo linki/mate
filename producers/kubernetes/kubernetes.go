@@ -3,9 +3,9 @@ package kubernetes
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
 
+	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/zalando-incubator/mate/pkg"
@@ -61,36 +61,26 @@ func NewProducer() (*kubernetesProducer, error) {
 }
 
 func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
-	ret := make([]*pkg.Endpoint, 0)
-
 	ingressEndpoints, err := a.ingress.Endpoints()
 	if err != nil {
-		log.Fatalf("Error getting endpoints from producer: %v", err)
+		return nil, fmt.Errorf("Error getting endpoints from producer: %v", err)
 	}
 
 	serviceEndpoints, err := a.service.Endpoints()
 	if err != nil {
-		log.Fatalf("Error getting endpoints from producer: %v", err)
+		return nil, fmt.Errorf("Error getting endpoints from producer: %v", err)
 	}
 
-	ret = append(ret, ingressEndpoints...)
-	ret = append(ret, serviceEndpoints...)
-
-	return ret, nil
+	return append(ingressEndpoints, serviceEndpoints...), nil
 }
 
 func (a *kubernetesProducer) StartWatch() error {
-
-	// a.wg.Add(1)
-
 	go func() {
-		// defer c.wg.Done()
-
 		for {
 			err := a.ingress.StartWatch()
 			switch {
 			case err == pkg.ErrEventChannelClosed:
-				//log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
+				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
 			case err != nil:
 				log.Fatalln(err)
 			}
@@ -103,13 +93,11 @@ func (a *kubernetesProducer) StartWatch() error {
 	}
 
 	go func() {
-		// defer c.wg.Done()
-
 		for {
 			err := a.service.StartWatch()
 			switch {
 			case err == pkg.ErrEventChannelClosed:
-			//	log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
+				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
 			case err != nil:
 				log.Fatalln(err)
 			}
@@ -130,7 +118,7 @@ func (a *kubernetesProducer) StartWatch() error {
 		}
 	}
 
-	return nil
+	return pkg.ErrEventChannelClosed
 }
 
 func (a *kubernetesProducer) ResultChan() (chan *pkg.Endpoint, error) {

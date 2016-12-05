@@ -49,15 +49,13 @@ func NewKubernetesService() (*kubernetesServiceProducer, error) {
 }
 
 func (a *kubernetesServiceProducer) Endpoints() ([]*pkg.Endpoint, error) {
-	ret := make([]*pkg.Endpoint, 0)
-
 	allServices, err := a.client.Services(api.NamespaceAll).List(api.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve list of services: %v", err)
 	}
 
-	log.Debugln("Current services and their endpoints:")
-	log.Debugln("=====================================")
+	endpoints := make([]*pkg.Endpoint, 0)
+
 	for _, svc := range allServices.Items {
 		if valid, problem := validateService(svc); !valid {
 			log.Warnln(problem)
@@ -70,10 +68,10 @@ func (a *kubernetesServiceProducer) Endpoints() ([]*pkg.Endpoint, error) {
 			return nil, err
 		}
 
-		ret = append(ret, ep)
+		endpoints = append(endpoints, ep)
 	}
 
-	return ret, nil
+	return endpoints, nil
 }
 
 func (a *kubernetesServiceProducer) StartWatch() error {
