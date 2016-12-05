@@ -49,15 +49,13 @@ func NewKubernetesIngress() (*kubernetesIngressProducer, error) {
 }
 
 func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
-	ret := make([]*pkg.Endpoint, 0)
-
 	allIngress, err := a.client.Ingress(api.NamespaceAll).List(api.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve list of ingress: %v", err)
 	}
 
-	log.Debugln("Current ingress and their endpoints:")
-	log.Debugln("=====================================")
+	endpoints := make([]*pkg.Endpoint, 0)
+
 	for _, ing := range allIngress.Items {
 		if valid, problem := validateIngress(ing); !valid {
 			log.Warnln(problem)
@@ -70,10 +68,10 @@ func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
 			return nil, err
 		}
 
-		ret = append(ret, eps...)
+		endpoints = append(endpoints, eps...)
 	}
 
-	return ret, nil
+	return endpoints, nil
 }
 
 func (a *kubernetesIngressProducer) StartWatch() error {
@@ -143,7 +141,7 @@ func validateIngress(ing extensions.Ingress) (bool, string) {
 }
 
 func (a *kubernetesIngressProducer) convertIngressToEndpoint(ing extensions.Ingress) ([]*pkg.Endpoint, error) {
-	ret := make([]*pkg.Endpoint, 0, len(ing.Spec.Rules))
+	endpoints := make([]*pkg.Endpoint, 0, len(ing.Spec.Rules))
 
 	for _, rule := range ing.Spec.Rules {
 		ep := &pkg.Endpoint{}
@@ -157,10 +155,10 @@ func (a *kubernetesIngressProducer) convertIngressToEndpoint(ing extensions.Ingr
 			break
 		}
 
-		ep.DNSName = rule.Host + "."
+		ep.DNSName = pkg.SanitizeDNSName(rule.Host)
 
-		ret = append(ret, ep)
+		endpoints = append(endpoints, ep)
 	}
 
-	return ret, nil
+	return endpoints, nil
 }
