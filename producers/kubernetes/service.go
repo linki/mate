@@ -1,4 +1,4 @@
-package producers
+package kubernetes
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned"
@@ -17,25 +16,13 @@ import (
 	"github.com/zalando-incubator/mate/pkg"
 )
 
-const (
-	defaultKubeServer = "http://127.0.0.1:8001"
-	defaultFormat     = "{{.Name}}-{{.Namespace}}"
-	annotationKey     = "zalando.org/dnsname"
-)
-
-type kubernetesProducer struct {
+type kubernetesServiceProducer struct {
 	client  *unversioned.Client
 	tmpl    *template.Template
 	channel chan *pkg.Endpoint
 }
 
-func init() {
-	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").Default(defaultKubeServer).URLVar(&params.kubeServer)
-	kingpin.Flag("kubernetes-format", "Format of DNS entries").Default(defaultFormat).StringVar(&params.format)
-	kingpin.Flag("kubernetes-domain", "The DNS domain to create DNS entries under.").StringVar(&params.domain)
-}
-
-func NewKubernetes() (*kubernetesProducer, error) {
+func NewKubernetesService() (*kubernetesServiceProducer, error) {
 	if params.domain == "" {
 		return nil, errors.New("Please provide --kubernetes-domain")
 	}
@@ -54,41 +41,40 @@ func NewKubernetes() (*kubernetesProducer, error) {
 		return nil, fmt.Errorf("Error parsing template: %s", err)
 	}
 
-	return &kubernetesProducer{
+	return &kubernetesServiceProducer{
 		client:  client,
 		tmpl:    tmpl,
 		channel: make(chan *pkg.Endpoint),
 	}, nil
 }
 
-func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
+func (a *kubernetesServiceProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	allServices, err := a.client.Services(api.NamespaceAll).List(api.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve list of services: %v", err)
 	}
 
-	log.Debugln("Current services and their endpoints:")
-	log.Debugln("=====================================")
-	ret := make([]*pkg.Endpoint, 0, len(allServices.Items))
+	endpoints := make([]*pkg.Endpoint, 0)
+
 	for _, svc := range allServices.Items {
 		if valid, problem := validateService(svc); !valid {
 			log.Warnln(problem)
 			continue
 		}
 
-		ep, err := a.convertToEndpoint(svc)
+		ep, err := a.convertServiceToEndpoint(svc)
 		if err != nil {
 			// TODO: consider allowing the service continue running and just log this error
 			return nil, err
 		}
 
-		ret = append(ret, ep)
+		endpoints = append(endpoints, ep)
 	}
 
-	return ret, nil
+	return endpoints, nil
 }
 
-func (a *kubernetesProducer) StartWatch() error {
+func (a *kubernetesServiceProducer) StartWatch() error {
 	w, err := a.client.Services(api.NamespaceAll).Watch(api.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("Unable to watch list of services: %v", err)
@@ -118,7 +104,7 @@ func (a *kubernetesProducer) StartWatch() error {
 			continue
 		}
 
-		ep, err := a.convertToEndpoint(*svc)
+		ep, err := a.convertServiceToEndpoint(*svc)
 		if err != nil {
 			// TODO: consider letting the service continue running and just log this error
 			return err
@@ -130,7 +116,7 @@ func (a *kubernetesProducer) StartWatch() error {
 	return pkg.ErrEventChannelClosed
 }
 
-func (a *kubernetesProducer) ResultChan() (chan *pkg.Endpoint, error) {
+func (a *kubernetesServiceProducer) ResultChan() (chan *pkg.Endpoint, error) {
 	return a.channel, nil
 }
 
@@ -152,7 +138,7 @@ func validateService(svc api.Service) (bool, string) {
 	return true, ""
 }
 
-func (a *kubernetesProducer) convertToEndpoint(svc api.Service) (*pkg.Endpoint, error) {
+func (a *kubernetesServiceProducer) convertServiceToEndpoint(svc api.Service) (*pkg.Endpoint, error) {
 	ep := &pkg.Endpoint{
 		DNSName: svc.ObjectMeta.Annotations[annotationKey],
 	}

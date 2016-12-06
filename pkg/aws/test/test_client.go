@@ -1,12 +1,11 @@
-package awsclienttest
+package test
 
 import (
 	"errors"
 
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/zalando-incubator/mate/pkg"
-
-	"github.com/zalando-incubator/mate/awsclient"
+	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 )
 
 type Options struct {

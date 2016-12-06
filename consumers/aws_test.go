@@ -5,9 +5,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/zalando-incubator/mate/awsclient"
-	"github.com/zalando-incubator/mate/awsclient/awsclienttest"
 	"github.com/zalando-incubator/mate/pkg"
+	awsclient "github.com/zalando-incubator/mate/pkg/aws"
+	awstest "github.com/zalando-incubator/mate/pkg/aws/test"
 )
 
 type awsTestItem struct {
@@ -71,12 +71,12 @@ func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*route53.Res
 func testAWSConsumer(t *testing.T, ti awsTestItem) {
 
 	groupID := "testing-group-id"
-	client := &awsclienttest.Client{
+	client := &awstest.Client{
 		Current: ti.init,
 		Client: awsclient.New(awsclient.Options{
 			GroupID: groupID,
 		}),
-		Options: awsclienttest.Options{
+		Options: awstest.Options{
 			HostedZone:   "test",
 			RecordSetTTL: 10,
 			GroupID:      groupID,

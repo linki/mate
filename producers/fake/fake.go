@@ -1,4 +1,4 @@
-package producers
+package fake
 
 import (
 	"fmt"
@@ -17,6 +17,12 @@ const (
 	ipMode        = "ip"
 	hostnameMode  = "hostname"
 )
+
+var params struct {
+	dnsName      string
+	mode         string
+	targetDomain string
+}
 
 type fakeProducer struct {
 	channel      chan *pkg.Endpoint
