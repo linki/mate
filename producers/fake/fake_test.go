@@ -96,14 +96,14 @@ func newProducer() *fakeProducer {
 	return producer
 }
 
-func newEndpoints(t *testing.T, producer Producer) []*pkg.Endpoint {
+func newEndpoints(t *testing.T, producer *fakeProducer) []*pkg.Endpoint {
 	if producer == nil {
 		producer = newProducer()
 	}
 
 	endpoints, err := producer.Endpoints()
 	if err != nil {
-		t.Error(err.Error())
+		t.Fatal(err.Error())
 	}
 
 	return endpoints
