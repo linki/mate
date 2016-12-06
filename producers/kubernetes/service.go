@@ -57,8 +57,8 @@ func (a *kubernetesServiceProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	endpoints := make([]*pkg.Endpoint, 0)
 
 	for _, svc := range allServices.Items {
-		if valid, problem := validateService(svc); !valid {
-			log.Warnln(problem)
+		if err := validateService(svc); err != nil {
+			log.Warnln(err)
 			continue
 		}
 
@@ -99,8 +99,8 @@ func (a *kubernetesServiceProducer) StartWatch() error {
 
 		log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
 
-		if valid, problem := validateService(*svc); !valid {
-			log.Println(problem)
+		if err := validateService(*svc); err != nil {
+			log.Warnln(err)
 			continue
 		}
 
@@ -120,22 +120,22 @@ func (a *kubernetesServiceProducer) ResultChan() (chan *pkg.Endpoint, error) {
 	return a.channel, nil
 }
 
-func validateService(svc api.Service) (bool, string) {
+func validateService(svc api.Service) error {
 	switch {
 	case len(svc.Status.LoadBalancer.Ingress) == 0:
-		return false, fmt.Sprintf(
+		return fmt.Errorf(
 			"The load balancer of service '%s/%s' does not have any ingress.",
 			svc.Namespace, svc.Name,
 		)
 	case len(svc.Status.LoadBalancer.Ingress) > 1:
 		// TODO(linki): in case we have multiple ingress we can just create multiple A or CNAME records
-		return false, fmt.Sprintf(
+		return fmt.Errorf(
 			"Cannot register service '%s/%s'. More than one ingress is not supported",
 			svc.Namespace, svc.Name,
 		)
 	}
 
-	return true, ""
+	return nil
 }
 
 func (a *kubernetesServiceProducer) convertServiceToEndpoint(svc api.Service) (*pkg.Endpoint, error) {
