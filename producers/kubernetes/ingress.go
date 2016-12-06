@@ -57,8 +57,8 @@ func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	endpoints := make([]*pkg.Endpoint, 0)
 
 	for _, ing := range allIngress.Items {
-		if valid, problem := validateIngress(ing); !valid {
-			log.Warnln(problem)
+		if err := validateIngress(ing); err != nil {
+			log.Warnln(err)
 			continue
 		}
 
@@ -99,8 +99,8 @@ func (a *kubernetesIngressProducer) StartWatch() error {
 
 		log.Printf("%s: %s/%s", event.Type, ing.Namespace, ing.Name)
 
-		if valid, problem := validateIngress(*ing); !valid {
-			log.Println(problem)
+		if err := validateIngress(*ing); err != nil {
+			log.Warnln(err)
 			continue
 		}
 
@@ -122,22 +122,22 @@ func (a *kubernetesIngressProducer) ResultChan() (chan *pkg.Endpoint, error) {
 	return a.channel, nil
 }
 
-func validateIngress(ing extensions.Ingress) (bool, string) {
+func validateIngress(ing extensions.Ingress) error {
 	switch {
 	case len(ing.Status.LoadBalancer.Ingress) == 0:
-		return false, fmt.Sprintf(
+		return fmt.Errorf(
 			"The load balancer of ingress '%s/%s' does not have any ingress.",
 			ing.Namespace, ing.Name,
 		)
 	case len(ing.Status.LoadBalancer.Ingress) > 1:
 		// TODO(linki): in case we have multiple ingress we can just create multiple A or CNAME records
-		return false, fmt.Sprintf(
+		return fmt.Errorf(
 			"Cannot register ingress '%s/%s'. More than one ingress is not supported",
 			ing.Namespace, ing.Name,
 		)
 	}
 
-	return true, ""
+	return nil
 }
 
 func (a *kubernetesIngressProducer) convertIngressToEndpoint(ing extensions.Ingress) ([]*pkg.Endpoint, error) {
