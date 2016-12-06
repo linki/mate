@@ -38,7 +38,7 @@ $ mate \
 
 For each exposed service Mate will create two records in Route53:
 
-1. A record - An Alias to the ELB with the name inferred from `kubernetes-format` and `kubernetes-domain`. So if you create an nginx service named `my-nginx` in the `default` namespace and use a `example.com` as domain the registered record will have a hostname of `default-my-nginx.example.com`.
+1. A record - An Alias to the ELB with the name inferred from `kubernetes-format` and `kubernetes-domain`. So if you create an nginx service named `my-nginx` in the `default` namespace and use a `example.com` as domain the registered record will have a hostname of `default-my-nginx.example.com`. You can, however, overwrite the generated DNS name by using an annotation on the service (`zalando.org/dnsname`). When using ingress DNS records based on the hostnames in your rules will be created.
 
 2. TXT record - A TXT record that will have the same name as an A record (`default-my-nginx.example.com`) and a special identifier with an embedded `aws-record-group-id` value. This helps to identify which records are created via Mate and makes it safe not to overwrite manually created records.
 
@@ -60,7 +60,7 @@ Analogous to the AWS case with the difference that it doesn't use the AWS specif
 ### Kubernetes
 
 By default Mate will retrieve the list of services from the Kubernetes API server via `http://127.0.0.1:8001` (for local testing use `kubectl proxy`), however the API server url can be configured with the `kubernetes-server` flag.
-Mate will listen for events from the API Server and creates corresponding records for newly created services. Further synchronization (update and removal) will occur every minute. There's an initial syncronization when Mate boots up so it's safe to reboot the process at any point in time. If you only like to do the synchronization you can use the `sync-only` flag.
+Mate will listen for events from the API Server and creates corresponding records for newly created services. Further synchronization (create, update and removal) will occur every minute. There's an initial syncronization when Mate boots up so it's safe to reboot the process at any point in time. If you only like to do the synchronization you can use the `sync-only` flag.
 
 # Producers and Consumers
 
