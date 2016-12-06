@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 
-	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/zalando-incubator/mate/pkg"
@@ -26,7 +26,8 @@ var params struct {
 type kubernetesProducer struct {
 	ingress *kubernetesIngressProducer
 	service *kubernetesServiceProducer
-	channel chan *pkg.Endpoint
+
+	wg sync.WaitGroup
 }
 
 func init() {
@@ -52,7 +53,6 @@ func NewProducer() (*kubernetesProducer, error) {
 	return &kubernetesProducer{
 		ingress: ingress,
 		service: service,
-		channel: make(chan *pkg.Endpoint),
 	}, nil
 }
 
@@ -70,53 +70,31 @@ func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	return append(ingressEndpoints, serviceEndpoints...), nil
 }
 
-func (a *kubernetesProducer) StartWatch() error {
+func (a *kubernetesProducer) Monitor() (chan *pkg.Endpoint, chan error) {
+	channel1, errors1 := a.ingress.Monitor()
+	channel2, errors2 := a.service.Monitor()
+
+	channel := make(chan *pkg.Endpoint)
+	errors := make(chan error)
+
+	a.wg.Add(1)
+
 	go func() {
+		defer a.wg.Done()
+
 		for {
-			err := a.ingress.StartWatch()
-			switch {
-			case err == pkg.ErrEventChannelClosed:
-				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
-			case err != nil:
-				log.Fatalln(err)
+			select {
+			case event := <-channel1:
+				channel <- event
+			case event := <-channel2:
+				channel <- event
+			case event := <-errors1:
+				errors <- event
+			case event := <-errors2:
+				errors <- event
 			}
 		}
 	}()
 
-	ingressChannel, err := a.ingress.ResultChan()
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		for {
-			err := a.service.StartWatch()
-			switch {
-			case err == pkg.ErrEventChannelClosed:
-				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
-			case err != nil:
-				log.Fatalln(err)
-			}
-		}
-	}()
-
-	serviceChannel, err := a.service.ResultChan()
-	if err != nil {
-		return err
-	}
-
-	for {
-		select {
-		case event := <-ingressChannel:
-			a.channel <- event
-		case event := <-serviceChannel:
-			a.channel <- event
-		}
-	}
-
-	return pkg.ErrEventChannelClosed
-}
-
-func (a *kubernetesProducer) ResultChan() (chan *pkg.Endpoint, error) {
-	return a.channel, nil
+	return channel, errors
 }

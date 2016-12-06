@@ -2,7 +2,11 @@ package controller
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -46,95 +50,130 @@ func New(producer producers.Producer, consumer consumers.Consumer, options *Opti
 	}
 }
 
-func (c *Controller) Synchronize() error {
+func (c *Controller) Run() chan error {
+	errors := make(chan error)
+
+	errors1 := c.Synchronize()
+	errors2 := c.Watch()
+
 	c.wg.Add(1)
 
 	go func() {
+		defer c.wg.Done()
+
 		for {
-			log.Infoln("Synchronizing DNS entries...")
+			select {
+			case err := <-errors1:
+				errors <- err
+			case err := <-errors2:
+				errors <- err
+			}
+		}
+	}()
+
+	return errors
+}
+
+func (c *Controller) RunAndWait() {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	errors := c.Run()
+
+	for {
+		select {
+		case err := <-errors:
+			log.Error(err)
+		case <-signalChan:
+			log.Info("Shutdown signal received, exiting...")
+			return
+		}
+	}
+}
+
+func (c *Controller) Synchronize() chan error {
+	errors := make(chan error)
+
+	c.wg.Add(1)
+
+	go func() {
+		defer c.wg.Done()
+
+		for {
+			log.Infoln("[Synchronize] Synchronizing DNS entries...")
 
 			endpoints, err := c.producer.Endpoints()
 			if err != nil {
-				log.Fatalf("Error getting endpoints from producer: %v", err)
+				errors <- fmt.Errorf("Error getting endpoints from producer: %v", err)
 			}
 
 			err = c.consumer.Sync(endpoints)
 			if err != nil {
-				log.Fatalf("Error consuming endpoints: %v", err)
+				errors <- fmt.Errorf("Error consuming endpoints: %v", err)
 			}
 
-			time.Sleep(c.options.syncPeriod)
+			log.Infof("[Synchronize] Sleeping for %s...", c.options.syncPeriod)
+			select {
+			case <-time.After(c.options.syncPeriod):
+			}
 		}
 	}()
 
-	return nil
+	return errors
 }
 
-func (c *Controller) Watch() error {
-	channel, err := c.monitorProducer()
-	if err != nil {
-		return err
-	}
+func (c *Controller) Watch() chan error {
+	errors := make(chan error)
 
-	err = c.processUpdates(channel)
-	if err != nil {
-		return err
-	}
+	channel, errors1 := c.monitorProducer()
+	errors2 := c.consumeEndpoints(channel)
 
-	return nil
-}
-
-func (c *Controller) Wait() {
-	c.wg.Wait()
-}
-
-func (c *Controller) monitorProducer() (chan *pkg.Endpoint, error) {
 	c.wg.Add(1)
 
 	go func() {
 		defer c.wg.Done()
 
 		for {
-			err := c.producer.StartWatch()
-			switch {
-			case err == pkg.ErrEventChannelClosed:
-				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
-			case err != nil:
-				log.Fatalln(err)
+			select {
+			case err := <-errors1:
+				errors <- err
+			case err := <-errors2:
+				errors <- err
 			}
 		}
 	}()
 
-	channel, err := c.producer.ResultChan()
-	if err != nil {
-		return nil, err
-	}
-
-	return channel, nil
+	return errors
 }
 
-func (c *Controller) processUpdates(channel chan *pkg.Endpoint) error {
+func (c *Controller) monitorProducer() (chan *pkg.Endpoint, chan error) {
+	return c.producer.Monitor()
+}
+
+func (c *Controller) consumeEndpoints(channel chan *pkg.Endpoint) chan error {
+	errChan := make(chan error)
+
 	c.wg.Add(1)
 
 	go func() {
 		defer c.wg.Done()
 
-		log.Infoln("Listening for events...")
+		log.Infoln("[Watch] Listening for events...")
 
 		for {
 			endpoint, ok := <-channel
 			if !ok {
-				log.Fatalln(errors.New("channel closed"))
+				errChan <- errors.New("[Watch] channel closed")
 			}
 
-			log.Infof("Processing (%s, %s, %s)\n", endpoint.DNSName, endpoint.IP, endpoint.Hostname)
+			log.Infof("[Watch] Processing (%s, %s, %s)\n", endpoint.DNSName, endpoint.IP, endpoint.Hostname)
 
 			err := c.consumer.Process(endpoint)
 			if err != nil {
-				log.Fatalln(err)
+				errChan <- err
 			}
 		}
 	}()
 
-	return nil
+	return errChan
 }

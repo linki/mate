@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
+	"sync"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -16,9 +18,10 @@ import (
 )
 
 type kubernetesIngressProducer struct {
-	client  *k8s.Clientset
-	tmpl    *template.Template
-	channel chan *pkg.Endpoint
+	client *k8s.Clientset
+	tmpl   *template.Template
+
+	wg sync.WaitGroup
 }
 
 func NewKubernetesIngress() (*kubernetesIngressProducer, error) {
@@ -35,9 +38,8 @@ func NewKubernetesIngress() (*kubernetesIngressProducer, error) {
 	}
 
 	return &kubernetesIngressProducer{
-		client:  client,
-		tmpl:    tmpl,
-		channel: make(chan *pkg.Endpoint),
+		client: client,
+		tmpl:   tmpl,
 	}, nil
 }
 
@@ -57,8 +59,8 @@ func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
 
 		eps, err := a.convertIngressToEndpoint(ing)
 		if err != nil {
-			// TODO: consider allowing the service continue running and just log this error
-			return nil, err
+			log.Error(err)
+			continue
 		}
 
 		endpoints = append(endpoints, eps...)
@@ -67,52 +69,63 @@ func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	return endpoints, nil
 }
 
-func (a *kubernetesIngressProducer) StartWatch() error {
-	w, err := a.client.Ingresses(api.NamespaceAll).Watch(api.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("Unable to watch list of ingress: %v", err)
-	}
+func (a *kubernetesIngressProducer) Monitor() (chan *pkg.Endpoint, chan error) {
+	channel := make(chan *pkg.Endpoint)
+	errors := make(chan error)
 
-	for event := range w.ResultChan() {
-		if event.Type == watch.Error {
-			// TODO: consider allowing the service continue running and just log this error
-			return fmt.Errorf("Event listener received an error, terminating: %v", event)
+	a.wg.Add(1)
+
+	go func() {
+		defer a.wg.Done()
+
+		for {
+			w, err := a.client.Ingresses(api.NamespaceAll).Watch(api.ListOptions{})
+			if err != nil {
+				errors <- fmt.Errorf("Unable to watch list of ingress: %v", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			for event := range w.ResultChan() {
+				if event.Type == watch.Error {
+					// TODO: consider allowing the service continue running and just log this error
+					errors <- fmt.Errorf("Event listener received an error, terminating: %v", event)
+					continue
+				}
+
+				if event.Type != watch.Added && event.Type != watch.Modified {
+					continue
+				}
+
+				ing, ok := event.Object.(*extensions.Ingress)
+				if !ok {
+					// If the object wasn't a Service we can safely ignore it
+					log.Printf("Cannot cast object to ingress: %v", ing)
+					continue
+				}
+
+				log.Printf("%s: %s/%s", event.Type, ing.Namespace, ing.Name)
+
+				if err := validateIngress(*ing); err != nil {
+					log.Warnln(err)
+					continue
+				}
+
+				eps, err := a.convertIngressToEndpoint(*ing)
+				if err != nil {
+					// TODO: consider letting the service continue running and just log this error
+					errors <- err
+					continue
+				}
+
+				for _, ep := range eps {
+					channel <- ep
+				}
+			}
 		}
+	}()
 
-		if event.Type != watch.Added && event.Type != watch.Modified {
-			continue
-		}
-
-		ing, ok := event.Object.(*extensions.Ingress)
-		if !ok {
-			// If the object wasn't a Service we can safely ignore it
-			log.Printf("Cannot cast object to ingress: %v", ing)
-			continue
-		}
-
-		log.Printf("%s: %s/%s", event.Type, ing.Namespace, ing.Name)
-
-		if err := validateIngress(*ing); err != nil {
-			log.Warnln(err)
-			continue
-		}
-
-		eps, err := a.convertIngressToEndpoint(*ing)
-		if err != nil {
-			// TODO: consider letting the service continue running and just log this error
-			return err
-		}
-
-		for _, ep := range eps {
-			a.channel <- ep
-		}
-	}
-
-	return pkg.ErrEventChannelClosed
-}
-
-func (a *kubernetesIngressProducer) ResultChan() (chan *pkg.Endpoint, error) {
-	return a.channel, nil
+	return channel, errors
 }
 
 func validateIngress(ing extensions.Ingress) error {

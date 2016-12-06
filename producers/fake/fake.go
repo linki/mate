@@ -2,11 +2,12 @@ package fake
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/zalando-incubator/mate/pkg"
@@ -29,6 +30,8 @@ type fakeProducer struct {
 	mode         string
 	dnsName      string
 	targetDomain string
+
+	wg sync.WaitGroup
 }
 
 func init() {
@@ -58,17 +61,24 @@ func (a *fakeProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	return endpoints, nil
 }
 
-func (a *fakeProducer) StartWatch() error {
-	for {
-		a.channel <- a.generateEndpoint()
-		time.Sleep(5 * time.Second)
-	}
+func (a *fakeProducer) Monitor() (chan *pkg.Endpoint, chan error) {
+	channel := make(chan *pkg.Endpoint)
 
-	return nil
-}
+	a.wg.Add(1)
 
-func (a *fakeProducer) ResultChan() (chan *pkg.Endpoint, error) {
-	return a.channel, nil
+	go func() {
+		defer a.wg.Done()
+
+		for {
+			channel <- a.generateEndpoint()
+
+			select {
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}()
+
+	return channel, make(chan error)
 }
 
 func (a *fakeProducer) generateEndpoint() *pkg.Endpoint {

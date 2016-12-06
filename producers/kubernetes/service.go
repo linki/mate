@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
+	"sync"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	api "k8s.io/client-go/pkg/api/v1"
@@ -16,9 +18,10 @@ import (
 )
 
 type kubernetesServiceProducer struct {
-	client  *k8s.Clientset
-	tmpl    *template.Template
-	channel chan *pkg.Endpoint
+	client *k8s.Clientset
+	tmpl   *template.Template
+
+	wg sync.WaitGroup
 }
 
 func NewKubernetesService() (*kubernetesServiceProducer, error) {
@@ -35,9 +38,8 @@ func NewKubernetesService() (*kubernetesServiceProducer, error) {
 	}
 
 	return &kubernetesServiceProducer{
-		client:  client,
-		tmpl:    tmpl,
-		channel: make(chan *pkg.Endpoint),
+		client: client,
+		tmpl:   tmpl,
 	}, nil
 }
 
@@ -57,8 +59,8 @@ func (a *kubernetesServiceProducer) Endpoints() ([]*pkg.Endpoint, error) {
 
 		ep, err := a.convertServiceToEndpoint(svc)
 		if err != nil {
-			// TODO: consider allowing the service continue running and just log this error
-			return nil, err
+			log.Error(err)
+			continue
 		}
 
 		endpoints = append(endpoints, ep)
@@ -67,50 +69,61 @@ func (a *kubernetesServiceProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	return endpoints, nil
 }
 
-func (a *kubernetesServiceProducer) StartWatch() error {
-	w, err := a.client.Services(api.NamespaceAll).Watch(api.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("Unable to watch list of services: %v", err)
-	}
+func (a *kubernetesServiceProducer) Monitor() (chan *pkg.Endpoint, chan error) {
+	channel := make(chan *pkg.Endpoint)
+	errors := make(chan error)
 
-	for event := range w.ResultChan() {
-		if event.Type == watch.Error {
-			// TODO: consider allowing the service continue running and just log this error
-			return fmt.Errorf("Event listener received an error, terminating: %v", event)
+	a.wg.Add(1)
+
+	go func() {
+		defer a.wg.Done()
+
+		for {
+			w, err := a.client.Services(api.NamespaceAll).Watch(api.ListOptions{})
+			if err != nil {
+				errors <- fmt.Errorf("Unable to watch list of services: %v", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			for event := range w.ResultChan() {
+				if event.Type == watch.Error {
+					// TODO: consider allowing the service continue running and just log this error
+					errors <- fmt.Errorf("Event listener received an error, terminating: %v", event)
+					continue
+				}
+
+				if event.Type != watch.Added && event.Type != watch.Modified {
+					continue
+				}
+
+				svc, ok := event.Object.(*api.Service)
+				if !ok {
+					// If the object wasn't a Service we can safely ignore it
+					log.Printf("Cannot cast object to service: %v", svc)
+					continue
+				}
+
+				log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
+
+				if err := validateService(*svc); err != nil {
+					log.Warnln(err)
+					continue
+				}
+
+				ep, err := a.convertServiceToEndpoint(*svc)
+				if err != nil {
+					// TODO: consider letting the service continue running and just log this error
+					errors <- err
+					continue
+				}
+
+				channel <- ep
+			}
 		}
+	}()
 
-		if event.Type != watch.Added && event.Type != watch.Modified {
-			continue
-		}
-
-		svc, ok := event.Object.(*api.Service)
-		if !ok {
-			// If the object wasn't a Service we can safely ignore it
-			log.Printf("Cannot cast object to service: %v", svc)
-			continue
-		}
-
-		log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
-
-		if err := validateService(*svc); err != nil {
-			log.Warnln(err)
-			continue
-		}
-
-		ep, err := a.convertServiceToEndpoint(*svc)
-		if err != nil {
-			// TODO: consider letting the service continue running and just log this error
-			return err
-		}
-
-		a.channel <- ep
-	}
-
-	return pkg.ErrEventChannelClosed
-}
-
-func (a *kubernetesServiceProducer) ResultChan() (chan *pkg.Endpoint, error) {
-	return a.channel, nil
+	return channel, errors
 }
 
 func validateService(svc api.Service) error {

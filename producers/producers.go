@@ -10,8 +10,7 @@ import (
 
 type Producer interface {
 	Endpoints() ([]*pkg.Endpoint, error)
-	StartWatch() error
-	ResultChan() (chan *pkg.Endpoint, error)
+	Monitor() (chan *pkg.Endpoint, chan error)
 }
 
 func New(name string) (Producer, error) {
