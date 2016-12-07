@@ -7,17 +7,17 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/extensions"
-	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/watch"
 
 	"github.com/zalando-incubator/mate/pkg"
+	"github.com/zalando-incubator/mate/pkg/kubernetes"
+	k8s "k8s.io/client-go/kubernetes"
+	api "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/pkg/watch"
 )
 
 type kubernetesIngressProducer struct {
-	client  *unversioned.Client
+	client  *k8s.Clientset
 	tmpl    *template.Template
 	channel chan *pkg.Endpoint
 }
@@ -27,11 +27,9 @@ func NewKubernetesIngress() (*kubernetesIngressProducer, error) {
 		return nil, errors.New("Please provide --kubernetes-domain")
 	}
 
-	client, err := unversioned.New(&restclient.Config{
-		Host: params.kubeServer.String(),
-	})
+	client, err := kubernetes.NewClient(params.kubeServer)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to create Kubernetes API client: %v", err)
+		return nil, fmt.Errorf("Unable to setup Kubernetes API client: %v", err)
 	}
 
 	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
@@ -49,7 +47,7 @@ func NewKubernetesIngress() (*kubernetesIngressProducer, error) {
 }
 
 func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
-	allIngress, err := a.client.Ingress(api.NamespaceAll).List(api.ListOptions{})
+	allIngress, err := a.client.Ingresses(api.NamespaceAll).List(api.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Unable to retrieve list of ingress: %v", err)
 	}
@@ -75,7 +73,7 @@ func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
 }
 
 func (a *kubernetesIngressProducer) StartWatch() error {
-	w, err := a.client.Ingress(api.NamespaceAll).Watch(api.ListOptions{})
+	w, err := a.client.Ingresses(api.NamespaceAll).Watch(api.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("Unable to watch list of ingress: %v", err)
 	}

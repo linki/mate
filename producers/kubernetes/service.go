@@ -8,16 +8,16 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/watch"
+	api "k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/watch"
 
 	"github.com/zalando-incubator/mate/pkg"
+	"github.com/zalando-incubator/mate/pkg/kubernetes"
+	k8s "k8s.io/client-go/kubernetes"
 )
 
 type kubernetesServiceProducer struct {
-	client  *unversioned.Client
+	client  *k8s.Clientset
 	tmpl    *template.Template
 	channel chan *pkg.Endpoint
 }
@@ -27,11 +27,9 @@ func NewKubernetesService() (*kubernetesServiceProducer, error) {
 		return nil, errors.New("Please provide --kubernetes-domain")
 	}
 
-	client, err := unversioned.New(&restclient.Config{
-		Host: params.kubeServer.String(),
-	})
+	client, err := kubernetes.NewClient(params.kubeServer)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to create Kubernetes API client: %v", err)
+		return nil, fmt.Errorf("Unable to setup Kubernetes API client: %v", err)
 	}
 
 	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
