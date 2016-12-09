@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	defaultKubeServer = "http://127.0.0.1:8001"
-	defaultFormat     = "{{.Name}}-{{.Namespace}}"
-	annotationKey     = "zalando.org/dnsname"
+	defaultFormat = "{{.Name}}-{{.Namespace}}"
+	annotationKey = "zalando.org/dnsname"
 )
 
 var params struct {
@@ -33,7 +32,7 @@ type kubernetesProducer struct {
 }
 
 func init() {
-	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").Default(defaultKubeServer).URLVar(&params.kubeServer)
+	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&params.kubeServer)
 	kingpin.Flag("kubernetes-format", "Format of DNS entries").Default(defaultFormat).StringVar(&params.format)
 	kingpin.Flag("kubernetes-domain", "The DNS domain to create DNS entries under.").StringVar(&params.domain)
 }
