@@ -104,7 +104,9 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 				}
 			}
 		}
-
+		// fmt.Println("Zone: ", zoneName)
+		// fmt.Println("To upsert: ", upsert)
+		// fmt.Println("To delete: ", del)
 		if len(upsert) > 0 || len(del) > 0 {
 			err := a.client.ChangeRecordSets(upsert, del, nil, zoneID)
 			if err != nil {
