@@ -1,6 +1,8 @@
 package aws
 
 import (
+	"errors"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
@@ -8,7 +10,7 @@ import (
 )
 
 var (
-	EvaluateTargetHealth = true
+	evaluateTargetHealth = true
 	defaultTxtTTL        = int64(300)
 )
 
@@ -35,7 +37,7 @@ func (c *Client) MapEndpointAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
 		AliasTarget: &route53.AliasTarget{
 			DNSName:              aws.String(ep.Hostname),
-			EvaluateTargetHealth: aws.Bool(EvaluateTargetHealth),
+			EvaluateTargetHealth: aws.Bool(evaluateTargetHealth),
 			HostedZoneId:         aliasHostedZoneID,
 		},
 	}
@@ -56,6 +58,8 @@ func (c *Client) MapEndpointTXT(ep *pkg.Endpoint) *route53.ResourceRecordSet {
 	return rs
 }
 
+// mapChanges ...
+// create a change batch per action
 func mapChanges(action string, rsets []*route53.ResourceRecordSet) []*route53.Change {
 	var changes []*route53.Change
 	for _, rset := range rsets {
@@ -67,25 +71,26 @@ func mapChanges(action string, rsets []*route53.ResourceRecordSet) []*route53.Ch
 	return changes
 }
 
-func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
-	zonesResult, err := ac.ListHostedZones(nil)
+// GetHostedZones ...
+// returns the map hosted zone name -> zone id
+func (c *Client) GetHostedZones() (map[string]string, error) {
+	client, err := c.initRoute53Client()
 	if err != nil {
 		return nil, err
 	}
 
-	if zonesResult == nil {
-		return nil, ErrInvalidAWSResponse
+	output, err := client.ListHostedZones(nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(output.HostedZones) == 0 {
+		return nil, errors.New("No hosted zones found")
 	}
 
-	zoneName := pkg.SanitizeDNSName(c.options.HostedZone)
-
-	var zoneID *string
-	for _, z := range zonesResult.HostedZones {
-		if aws.StringValue(z.Name) == zoneName {
-			zoneID = z.Id
-			break
-		}
+	result := map[string]string{}
+	for _, zone := range output.HostedZones {
+		result[aws.StringValue(zone.Name)] = aws.StringValue(zone.Id)
 	}
 
-	return zoneID, nil
+	return result, nil
 }

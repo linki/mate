@@ -49,21 +49,14 @@ func New(o Options) *Client {
 
 //ListRecordSets ...
 //retrieve A records filtered by aws group id
-func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
+func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error) {
 	client, err := c.initRoute53Client()
 	if err != nil {
 		return nil, err
 	}
-	zoneID, err := c.getZoneID(client)
-	if err != nil {
-		return nil, err
-	}
-	if zoneID == nil {
-		return nil, fmt.Errorf("hosted zone not found: %s", c.options.HostedZone)
-	}
 	// TODO: implement paging
 	params := &route53.ListResourceRecordSetsInput{
-		HostedZoneId: zoneID,
+		HostedZoneId: aws.String(zoneID),
 	}
 	rsp, err := client.ListResourceRecordSets(params)
 	if err != nil {
@@ -77,13 +70,8 @@ func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
 	return rsp.ResourceRecordSets, nil
 }
 
-func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error {
+func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error {
 	client, err := c.initRoute53Client()
-	if err != nil {
-		return err
-	}
-
-	zoneID, err := c.getZoneID(client)
 	if err != nil {
 		return err
 	}
@@ -97,7 +85,7 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 			ChangeBatch: &route53.ChangeBatch{
 				Changes: changes,
 			},
-			HostedZoneId: zoneID,
+			HostedZoneId: aws.String(zoneID),
 		}
 		_, err = client.ChangeResourceRecordSets(params)
 		return err

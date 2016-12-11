@@ -17,11 +17,12 @@ import (
 // Implementations provide access to AWS Route53 API's
 // required calls.
 type AWSClient interface {
-	ListRecordSets() ([]*route53.ResourceRecordSet, error)
+	ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error)
 	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error
 	MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error)
 	RecordMap(records []*route53.ResourceRecordSet) map[string]string
 	GetGroupID() string
+	GetHostedZones() (map[string]string, error)
 }
 
 type awsClient struct {
@@ -53,53 +54,60 @@ func withClient(c AWSClient) *awsClient {
 }
 
 func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
-	records, err := a.client.ListRecordSets()
+	hostedZonesMap, err := a.client.GetHostedZones()
 	if err != nil {
 		return err
 	}
 
-	recordMap := a.client.RecordMap(records)
-
-	next, err := a.client.MapEndpoints(endpoints)
-	if err != nil {
-		return err
-	}
-
-	var upsert, del []*route53.ResourceRecordSet
-
-	for _, endpoint := range next {
-		groupID, exist := recordMap[aws.StringValue(endpoint.Name)]
-
-		if exist && groupID != a.client.GetGroupID() {
-			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(endpoint.Name), groupID)
-			continue
+	for zoneName, zoneID := range hostedZonesMap {
+		records, err := a.client.ListRecordSets(zoneID)
+		if err != nil {
+			return err
 		}
 
-		if !exist || (exist && groupID == a.client.GetGroupID()) {
-			upsert = append(upsert, endpoint)
-		}
-	}
+		recordMap := a.client.RecordMap(records)
 
-	for _, record := range records {
-		groupID := recordMap[aws.StringValue(record.Name)]
-		if groupID == a.client.GetGroupID() {
-			remove := true
-			for _, endpoint := range next {
-				if aws.StringValue(endpoint.Name) == aws.StringValue(record.Name) {
-					remove = false
+		next, err := a.client.MapEndpoints(endpoints)
+		if err != nil {
+			return err
+		}
+
+		var upsert, del []*route53.ResourceRecordSet
+
+		for _, endpoint := range next {
+			groupID, exist := recordMap[aws.StringValue(endpoint.Name)]
+
+			if exist && groupID != a.client.GetGroupID() {
+				log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(endpoint.Name), groupID)
+				continue
+			}
+
+			if !exist || (exist && groupID == a.client.GetGroupID()) {
+				upsert = append(upsert, endpoint)
+			}
+		}
+
+		for _, record := range records {
+			groupID := recordMap[aws.StringValue(record.Name)]
+			if groupID == a.client.GetGroupID() {
+				remove := true
+				for _, endpoint := range next {
+					if aws.StringValue(endpoint.Name) == aws.StringValue(record.Name) {
+						remove = false
+					}
+				}
+				if remove {
+					del = append(del, record)
 				}
 			}
-			if remove {
-				del = append(del, record)
-			}
 		}
-	}
 
-	if len(upsert) > 0 || len(del) > 0 {
-		return a.client.ChangeRecordSets(upsert, del, nil)
-	}
+		if len(upsert) > 0 || len(del) > 0 {
+			return a.client.ChangeRecordSets(upsert, del, nil)
+		}
 
-	log.Infoln("No changes submitted")
+		log.Infoln("No changes submitted")
+	}
 
 	return nil
 }
