@@ -18,7 +18,7 @@ import (
 // required calls.
 type AWSClient interface {
 	ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error)
-	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error
+	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error
 	MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error)
 	RecordMap(records []*route53.ResourceRecordSet) map[string]string
 	GetGroupID() string
@@ -54,6 +54,11 @@ func withClient(c AWSClient) *awsClient {
 }
 
 func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
+	next, err := a.client.MapEndpoints(endpoints)
+	if err != nil {
+		return err
+	}
+
 	hostedZonesMap, err := a.client.GetHostedZones()
 	if err != nil {
 		return err
@@ -67,11 +72,6 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 
 		recordMap := a.client.RecordMap(records)
 
-		next, err := a.client.MapEndpoints(endpoints)
-		if err != nil {
-			return err
-		}
-
 		var upsert, del []*route53.ResourceRecordSet
 
 		for _, endpoint := range next {
@@ -82,7 +82,10 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 				continue
 			}
 
-			if !exist || (exist && groupID == a.client.GetGroupID()) {
+			if !exist && strings.HasSuffix(aws.StringValue(endpoint.Name), zoneName) {
+				upsert = append(upsert, endpoint)
+			}
+			if exist && groupID == a.client.GetGroupID() {
 				upsert = append(upsert, endpoint)
 			}
 		}
@@ -103,25 +106,39 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 		}
 
 		if len(upsert) > 0 || len(del) > 0 {
-			return a.client.ChangeRecordSets(upsert, del, nil)
+			err := a.client.ChangeRecordSets(upsert, del, nil, zoneID)
+			if err != nil {
+				return err
+			}
 		}
-
-		log.Infoln("No changes submitted")
 	}
 
 	return nil
 }
 
 func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
+	hostedZonesMap, err := a.client.GetHostedZones()
+	if err != nil {
+		return err
+	}
+
 	create, err := a.client.MapEndpoints([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
 	}
 
-	err = a.client.ChangeRecordSets(nil, nil, create)
-	if err != nil && strings.Contains(err.Error(), "it already exists") {
-		log.Warnf("Record [name=%s] could not be created, another record with same name already exists", endpoint.DNSName)
-		return nil
+	for zoneName, zoneID := range hostedZonesMap {
+		if !strings.HasSuffix(aws.StringValue(create[0].Name), zoneName) {
+			continue
+		}
+		err = a.client.ChangeRecordSets(nil, nil, create, zoneID)
+		if err != nil && strings.Contains(err.Error(), "it already exists") {
+			log.Warnf("Record [name=%s] could not be created, another record with same name already exists", endpoint.DNSName)
+			return nil
+		}
+		return err
 	}
-	return err
+
+	log.Infoln("Hosted zone not found. Skipping record: ", endpoint.DNSName)
+	return nil
 }
