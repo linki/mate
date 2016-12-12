@@ -18,7 +18,6 @@ const (
 var params struct {
 	project string
 	zone    string
-	domain  string
 
 	kubeServer *url.URL
 	format     string

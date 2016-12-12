@@ -142,7 +142,7 @@ func (a *kubernetesServiceProducer) convertServiceToEndpoint(svc api.Service) (*
 			return nil, fmt.Errorf("Error applying template: %s", err)
 		}
 
-		ep.DNSName = fmt.Sprintf("%s.%s", buf.String(), params.domain)
+		ep.DNSName = pkg.SanitizeDNSName(buf.String())
 	}
 
 	for _, i := range svc.Status.LoadBalancer.Ingress {
