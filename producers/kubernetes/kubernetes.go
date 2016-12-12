@@ -36,7 +36,7 @@ func init() {
 
 func NewProducer() (*kubernetesProducer, error) {
 	if params.format == "" {
-		return nil, errors.New("Please provider --kubernetes-format")
+		return nil, errors.New("Please provide --kubernetes-format")
 	}
 
 	ingress, err := NewKubernetesIngress()
