@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"html/template"
 	"strings"
@@ -23,10 +22,6 @@ type kubernetesServiceProducer struct {
 }
 
 func NewKubernetesService() (*kubernetesServiceProducer, error) {
-	if params.domain == "" {
-		return nil, errors.New("Please provide --kubernetes-domain")
-	}
-
 	client, err := kubernetes.NewClient(params.kubeServer)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to setup Kubernetes API client: %v", err)

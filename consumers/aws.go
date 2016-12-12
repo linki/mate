@@ -81,7 +81,7 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 			if !exist && strings.HasSuffix(aws.StringValue(endpoint.Name), zoneName) {
 				upsert = append(upsert, endpoint)
 			}
-			if exist && groupID == a.client.GetGroupID() {
+			if exist && groupID == a.client.GetGroupID() { //TODO:ideahitme: fix the  unnecessary upsert
 				upsert = append(upsert, endpoint)
 			}
 		}
