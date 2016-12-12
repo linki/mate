@@ -9,7 +9,6 @@ import (
 )
 
 type Options struct {
-	HostedZone   string
 	RecordSetTTL int
 	GroupID      string
 }
