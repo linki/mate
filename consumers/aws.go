@@ -75,7 +75,7 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 		for i, endpoint := range next {
 			groupID, exist := recordMap[aws.StringValue(endpoint.Name)]
 
-			if exist && groupID != a.client.GetGroupID() {
+			if exist && groupID != a.client.GetGroupID() { //if the record exists, but does not have associated TXT record or TXT record group id is different
 				log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(endpoint.Name), groupID)
 				continue
 			}
@@ -127,11 +127,11 @@ func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
 	}
 
 	for zoneName, zoneID := range hostedZonesMap {
-		if !strings.HasSuffix(aws.StringValue(create[0].Name), zoneName) {
+		if !strings.HasSuffix(aws.StringValue(create[0].Name), zoneName) { // speicified DNS does not match the hosted zones domain
 			continue
 		}
 		err = a.client.ChangeRecordSets(nil, nil, create, zoneID)
-		if err != nil && strings.Contains(err.Error(), "it already exists") {
+		if err != nil && strings.Contains(err.Error(), "already exists") {
 			log.Warnf("Record [name=%s] could not be created, another record with same name already exists", endpoint.DNSName)
 			return nil
 		}
