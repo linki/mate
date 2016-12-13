@@ -54,6 +54,8 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 		return err
 	}
 
+	isProcessed := make([]bool, len(next), len(next)) //indicates whether the record was already processed
+
 	hostedZonesMap, err := a.client.GetHostedZones()
 
 	if err != nil {
@@ -70,7 +72,7 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 
 		var upsert, del []*route53.ResourceRecordSet
 
-		for _, endpoint := range next {
+		for i, endpoint := range next {
 			groupID, exist := recordMap[aws.StringValue(endpoint.Name)]
 
 			if exist && groupID != a.client.GetGroupID() {
@@ -78,11 +80,13 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 				continue
 			}
 
-			if !exist && strings.HasSuffix(aws.StringValue(endpoint.Name), zoneName) {
+			if !exist && strings.HasSuffix(aws.StringValue(endpoint.Name), zoneName) && !isProcessed[i] {
 				upsert = append(upsert, endpoint)
+				isProcessed[i] = true
 			}
-			if exist && groupID == a.client.GetGroupID() { //TODO:ideahitme: fix the  unnecessary upsert
+			if exist && groupID == a.client.GetGroupID() && !isProcessed[i] { //TODO:ideahitme: fix the  unnecessary upsert
 				upsert = append(upsert, endpoint)
+				isProcessed[i] = true
 			}
 		}
 
