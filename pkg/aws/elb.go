@@ -8,6 +8,11 @@ import (
 	"github.com/zalando-incubator/mate/pkg"
 )
 
+type LoadBalancer struct {
+	DNSName     string
+	CanonZoneID string
+}
+
 //getCanonicalZoneIDs returns the map of LB (ALB + ELB classic) mapped to its CanonicalHostedZoneId
 func (c *Client) getCanonicalZoneIDs(endpoints []*pkg.Endpoint) (map[string]string, error) {
 	session, err := session.NewSessionWithOptions(session.Options{
@@ -21,59 +26,64 @@ func (c *Client) getCanonicalZoneIDs(endpoints []*pkg.Endpoint) (map[string]stri
 		return nil, err
 	}
 
-	loadBalancerMap := map[string]string{} //map LB Dns to its canonical hosted zone id
-
-	err = c.writeALBsToMap(loadBalancerMap, endpoints, session)
+	albs, err := c.getALBs(session)
 	if err != nil {
 		return nil, err
 	}
 
-	err = c.writeELBsToMap(loadBalancerMap, endpoints, session)
+	elbs, err := c.getELBs(session)
 	if err != nil {
 		return nil, err
 	}
 
-	return loadBalancerMap, nil
+	loadBalancers := append(albs, elbs...)
+	loadBalancersMap := map[string]string{} //map LB Dns to its canonical hosted zone id
+
+	for _, endpoint := range endpoints {
+		for _, loadBalancer := range loadBalancers {
+			if endpoint.Hostname == loadBalancer.DNSName {
+				loadBalancersMap[endpoint.Hostname] = loadBalancer.CanonZoneID
+			}
+		}
+	}
+
+	return loadBalancersMap, nil
 }
 
-func (c *Client) writeELBsToMap(loadBalancerMap map[string]string, endpoints []*pkg.Endpoint, session *session.Session) error {
+func (c *Client) getELBs(session *session.Session) ([]*LoadBalancer, error) {
 	client := elb.New(session)
 
 	resp, err := client.DescribeLoadBalancers(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	loadBalancers := resp.LoadBalancerDescriptions
-
+	result := make([]*LoadBalancer, 0)
 	for _, loadbalancer := range loadBalancers {
-		for _, endpoint := range endpoints {
-			if aws.StringValue(loadbalancer.DNSName) == endpoint.Hostname {
-				loadBalancerMap[endpoint.Hostname] = aws.StringValue(loadbalancer.CanonicalHostedZoneNameID)
-				break
-			}
-		}
+		result = append(result, &LoadBalancer{
+			DNSName:     aws.StringValue(loadbalancer.DNSName),
+			CanonZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneNameID),
+		})
 	}
-	return nil
+	return result, nil
 }
 
-func (c *Client) writeALBsToMap(loadBalancerMap map[string]string, endpoints []*pkg.Endpoint, session *session.Session) error {
+func (c *Client) getALBs(session *session.Session) ([]*LoadBalancer, error) {
 	client := elbv2.New(session)
 
 	resp, err := client.DescribeLoadBalancers(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	loadBalancers := resp.LoadBalancers
-
+	result := make([]*LoadBalancer, 0)
 	for _, loadbalancer := range loadBalancers {
-		for _, endpoint := range endpoints {
-			if aws.StringValue(loadbalancer.DNSName) == endpoint.Hostname {
-				loadBalancerMap[endpoint.Hostname] = aws.StringValue(loadbalancer.CanonicalHostedZoneId)
-				break
-			}
-		}
+		result = append(result, &LoadBalancer{
+			DNSName:     aws.StringValue(loadbalancer.DNSName),
+			CanonZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneId),
+		})
 	}
-	return nil
+	return result, nil
 }
