@@ -106,17 +106,19 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 }
 
 func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
-	elbs, err := c.getELBDescriptions(endpoints)
+	zoneIDs, err := c.getCanonicalZoneIDs(endpoints)
 	if err != nil {
 		return nil, err
 	}
-
 	var rset []*route53.ResourceRecordSet
 
 	for _, ep := range endpoints {
-		aliasZoneID := getELBZoneID(ep, elbs)
-		rset = append(rset, c.MapEndpointAlias(ep, aliasZoneID))
-		rset = append(rset, c.MapEndpointTXT(ep))
+		if LoadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
+			rset = append(rset, c.MapEndpointAlias(ep, aws.String(LoadBalancerZoneID)))
+			rset = append(rset, c.MapEndpointTXT(ep))
+		} else {
+			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
+		}
 	}
 	return rset, nil
 }
