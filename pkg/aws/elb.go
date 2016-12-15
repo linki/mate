@@ -8,10 +8,10 @@ import (
 	"github.com/zalando-incubator/mate/pkg"
 )
 
-//LoadBalancer struct to aggregate ELB and ALB with extracted DNSName and its canonnical hosted zone id
+//LoadBalancer struct to aggregate ELB and ALB with extracted DNSName and its canonical hosted zone id
 type LoadBalancer struct {
-	DNSName     string
-	CanonZoneID string
+	DNSName         string
+	CanonicalZoneID string
 }
 
 //getCanonicalZoneIDs returns the map of LB (ALB + ELB classic) mapped to its CanonicalHostedZoneId
@@ -43,7 +43,7 @@ func (c *Client) getCanonicalZoneIDs(endpoints []*pkg.Endpoint) (map[string]stri
 	for _, endpoint := range endpoints {
 		for _, loadBalancer := range loadBalancers {
 			if endpoint.Hostname == loadBalancer.DNSName {
-				loadBalancersMap[endpoint.Hostname] = loadBalancer.CanonZoneID
+				loadBalancersMap[endpoint.Hostname] = loadBalancer.CanonicalZoneID
 			}
 		}
 	}
@@ -63,8 +63,8 @@ func (c *Client) getELBs(session *session.Session) ([]*LoadBalancer, error) {
 	result := make([]*LoadBalancer, len(loadBalancers))
 	for i, loadbalancer := range loadBalancers {
 		result[i] = &LoadBalancer{
-			DNSName:     aws.StringValue(loadbalancer.DNSName),
-			CanonZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneNameID),
+			DNSName:         aws.StringValue(loadbalancer.DNSName),
+			CanonicalZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneNameID),
 		}
 	}
 	return result, nil
@@ -82,8 +82,8 @@ func (c *Client) getALBs(session *session.Session) ([]*LoadBalancer, error) {
 	result := make([]*LoadBalancer, len(loadBalancers))
 	for i, loadbalancer := range loadBalancers {
 		result[i] = &LoadBalancer{
-			DNSName:     aws.StringValue(loadbalancer.DNSName),
-			CanonZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneId),
+			DNSName:         aws.StringValue(loadbalancer.DNSName),
+			CanonicalZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneId),
 		}
 	}
 	return result, nil
