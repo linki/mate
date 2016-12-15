@@ -8,6 +8,7 @@ import (
 	"github.com/zalando-incubator/mate/pkg"
 )
 
+//LoadBalancer struct to aggregate ELB and ALB with extracted DNSName and its canonnical hosted zone id
 type LoadBalancer struct {
 	DNSName     string
 	CanonZoneID string
@@ -59,12 +60,12 @@ func (c *Client) getELBs(session *session.Session) ([]*LoadBalancer, error) {
 	}
 
 	loadBalancers := resp.LoadBalancerDescriptions
-	result := make([]*LoadBalancer, 0)
-	for _, loadbalancer := range loadBalancers {
-		result = append(result, &LoadBalancer{
+	result := make([]*LoadBalancer, len(loadBalancers))
+	for i, loadbalancer := range loadBalancers {
+		result[i] = &LoadBalancer{
 			DNSName:     aws.StringValue(loadbalancer.DNSName),
 			CanonZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneNameID),
-		})
+		}
 	}
 	return result, nil
 }
@@ -78,12 +79,12 @@ func (c *Client) getALBs(session *session.Session) ([]*LoadBalancer, error) {
 	}
 
 	loadBalancers := resp.LoadBalancers
-	result := make([]*LoadBalancer, 0)
-	for _, loadbalancer := range loadBalancers {
-		result = append(result, &LoadBalancer{
+	result := make([]*LoadBalancer, len(loadBalancers))
+	for i, loadbalancer := range loadBalancers {
+		result[i] = &LoadBalancer{
 			DNSName:     aws.StringValue(loadbalancer.DNSName),
 			CanonZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneId),
-		})
+		}
 	}
 	return result, nil
 }
