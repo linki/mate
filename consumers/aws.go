@@ -70,14 +70,19 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 	for _, endpoint := range next {
 		groupID, exist := recordMap[aws.StringValue(endpoint.Name)]
 
-		if exist && groupID != a.client.GetGroupID() {
+		if !exist { //record does not exist, create it
+			upsert = append(upsert, endpoint)
+			continue
+		}
+
+		if groupID != a.client.GetGroupID() { // there exist a record with a different or empty group ID
 			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(endpoint.Name), groupID)
 			continue
 		}
 
-		if !exist || (exist && groupID == a.client.GetGroupID()) {
-			upsert = append(upsert, endpoint)
-		}
+		//make sure record really requires update, not to spam AWS route53 api with dummy updates
+		if 
+		2
 	}
 
 	for _, record := range records {

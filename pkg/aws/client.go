@@ -113,8 +113,8 @@ func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRec
 	var rset []*route53.ResourceRecordSet
 
 	for _, ep := range endpoints {
-		if LoadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
-			rset = append(rset, c.MapEndpointAlias(ep, aws.String(LoadBalancerZoneID)))
+		if loadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
+			rset = append(rset, c.MapEndpointAlias(ep, aws.String(loadBalancerZoneID)))
 			rset = append(rset, c.MapEndpointTXT(ep))
 		} else {
 			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
