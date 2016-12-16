@@ -18,7 +18,7 @@ func TestMapEndpointAlias(t *testing.T) {
 		IP:       "10.202.10.123",
 		Hostname: "amazon.elb.com",
 	}
-	rsA := client.MapEndpointAlias(ep, &zoneID)
+	rsA := client.EndpointToAlias(ep, &zoneID)
 	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
 		*rsA.AliasTarget.DNSName != ep.Hostname ||
 		*rsA.AliasTarget.HostedZoneId != zoneID {
@@ -34,7 +34,8 @@ func TestMapEndpointTXT(t *testing.T) {
 		IP:       "10.202.10.123",
 		Hostname: "amazon.elb.com",
 	}
-	rsTXT := client.MapEndpointTXT(ep)
+	rsA := client.EndpointToAlias(ep, &zoneID)
+	rsTXT := client.GetAssignedTXTRecordObject(rsA)
 	if *rsTXT.Type != "TXT" ||
 		*rsTXT.Name != "example.com." ||
 		len(rsTXT.ResourceRecords) != 1 ||

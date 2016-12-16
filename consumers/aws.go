@@ -19,9 +19,10 @@ import (
 type AWSClient interface {
 	ListRecordSets() ([]*route53.ResourceRecordSet, error)
 	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error
-	MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error)
+	EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error)
 	RecordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo
 	GetGroupID() string
+	GetAssignedTXTRecordObject(record *route53.ResourceRecordSet) *route53.ResourceRecordSet
 }
 
 type awsClient struct {
@@ -33,7 +34,7 @@ func init() {
 	kingpin.Flag("aws-record-group-id", "Identifier to filter the mate records ").StringVar(&params.awsGroupID)
 }
 
-// NewAWS reates a Consumer instance to sync and process DNS
+// NewAWSRoute53 reates a Consumer instance to sync and process DNS
 // entries in AWS Route53.
 func NewAWSRoute53() (Consumer, error) {
 	if params.awsHostedZone == "" {
@@ -53,45 +54,46 @@ func withClient(c AWSClient) *awsClient {
 }
 
 func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
-	records, err := a.client.ListRecordSets()
+	existingRecords, err := a.client.ListRecordSets()
 	if err != nil {
 		return err
 	}
 
-	recordMap := a.client.RecordInfo(records)
-
-	next, err := a.client.MapEndpoints(endpoints)
+	recordInfoMap := a.client.RecordInfo(existingRecords)
+	newAliasRecords, err := a.client.EndpointsToAlias(endpoints)
 	if err != nil {
 		return err
 	}
 
 	var upsert, del []*route53.ResourceRecordSet
 
-	for _, endpoint := range next {
-		recordInfo, exist := recordMap[aws.StringValue(endpoint.Name)]
+	for _, newAliasRecord := range newAliasRecords {
+		existingRecordInfo, exist := recordInfoMap[aws.StringValue(newAliasRecord.Name)]
 
-		if !exist { //record does not exist, create it
-			upsert = append(upsert, endpoint)
+		if !exist { //record does not exist, create with
+			newTXTRecord := a.client.GetAssignedTXTRecordObject(newAliasRecord)
+			upsert = append(upsert, newAliasRecord, newTXTRecord)
 			continue
 		}
 
-		if recordInfo.GroupID != a.client.GetGroupID() { // there exist a record with a different or empty group ID
-			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(endpoint.Name), recordInfo.GroupID)
+		if existingRecordInfo.GroupID != a.client.GetGroupID() { // there exist a record with a different or empty group ID
+			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(newAliasRecord.Name), existingRecordInfo.GroupID)
 			continue
 		}
 
-		//make sure record only updated when target changes, not to spam AWS route53 api with dummy updates
-		if recordInfo.Target != aws.StringValue(endpoint.AliasTarget.DNSName) {
-			upsert = append(upsert, endpoint)
+		// make sure record only updated when target changes, not to spam AWS route53 API with dummy updates
+		if existingRecordInfo.Target != aws.StringValue(newAliasRecord.AliasTarget.DNSName) {
+			newTXTRecord := a.client.GetAssignedTXTRecordObject(newAliasRecord)
+			upsert = append(upsert, newAliasRecord, newTXTRecord)
 		}
 	}
 
-	for _, record := range records {
-		recordInfo := recordMap[aws.StringValue(record.Name)]
+	for _, record := range existingRecords {
+		recordInfo := recordInfoMap[aws.StringValue(record.Name)]
 		if recordInfo.GroupID == a.client.GetGroupID() {
 			remove := true
-			for _, endpoint := range next {
-				if aws.StringValue(endpoint.Name) == aws.StringValue(record.Name) {
+			for _, newAliasRecord := range newAliasRecords {
+				if aws.StringValue(newAliasRecord.Name) == aws.StringValue(record.Name) {
 					remove = false
 				}
 			}
@@ -111,11 +113,12 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 }
 
 func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
-	create, err := a.client.MapEndpoints([]*pkg.Endpoint{endpoint})
+	alias, err := a.client.EndpointsToAlias([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
 	}
-
+	txt := a.client.GetAssignedTXTRecordObject(alias[0])
+	create := []*route53.ResourceRecordSet{alias[0], txt}
 	err = a.client.ChangeRecordSets(nil, nil, create)
 	if err != nil && strings.Contains(err.Error(), "it already exists") {
 		log.Warnf("Record [name=%s] could not be created, another record with same name already exists", endpoint.DNSName)

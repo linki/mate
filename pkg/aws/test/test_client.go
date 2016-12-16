@@ -28,12 +28,11 @@ func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
 	return c.Current, nil
 }
 
-func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
+func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
 	var rset []*route53.ResourceRecordSet
 	aliasZoneID := "test"
 	for _, ep := range endpoints {
-		rset = append(rset, c.Client.MapEndpointAlias(ep, &aliasZoneID))
-		rset = append(rset, c.Client.MapEndpointTXT(ep))
+		rset = append(rset, c.Client.EndpointToAlias(ep, &aliasZoneID))
 	}
 	return rset, nil
 }

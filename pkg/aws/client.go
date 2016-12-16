@@ -105,7 +105,8 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 	return nil
 }
 
-func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
+//EndpointsToAlias converts pkg Endpoint to route53 Alias Records
+func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
 	zoneIDs, err := c.getCanonicalZoneIDs(endpoints)
 	if err != nil {
 		return nil, err
@@ -114,8 +115,7 @@ func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRec
 
 	for _, ep := range endpoints {
 		if loadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
-			rset = append(rset, c.MapEndpointAlias(ep, aws.String(loadBalancerZoneID)))
-			rset = append(rset, c.MapEndpointTXT(ep))
+			rset = append(rset, c.EndpointToAlias(ep, aws.String(loadBalancerZoneID)))
 		} else {
 			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
 		}
@@ -125,39 +125,45 @@ func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRec
 
 //RecordInfo returns the map of record assigned dns to its target and groupID (can be empty)
 func (c *Client) RecordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo {
-	recordMap := map[string]string{}
+	groupIDMap := map[string]string{} //maps dns to group ID
 
 	for _, record := range records {
 		if (aws.StringValue(record.Type)) == "TXT" {
-			recordMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
+			groupIDMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
 		} else {
-			if _, exist := recordMap[aws.StringValue(record.Name)]; !exist {
-				recordMap[aws.StringValue(record.Name)] = ""
+			if _, exist := groupIDMap[aws.StringValue(record.Name)]; !exist {
+				groupIDMap[aws.StringValue(record.Name)] = ""
 			}
 		}
 	}
 
 	infoMap := map[string]*pkg.RecordInfo{}
 	for _, record := range records {
-		groupID := recordMap[aws.StringValue(record.Name)]
-		if (aws.StringValue(record.Type)) == "TXT" {
-			continue
+		groupID := groupIDMap[aws.StringValue(record.Name)]
+		if _, exist := infoMap[aws.StringValue(record.Name)]; !exist {
+			infoMap[aws.StringValue(record.Name)] = &pkg.RecordInfo{
+				GroupID: groupID,
+			}
 		}
-		infoMap[aws.StringValue(record.Name)] = &pkg.RecordInfo{
-			GroupID: groupID,
-			Target:  extractRecordTarget(record),
+		if aws.StringValue(record.Type) != "TXT" {
+			infoMap[aws.StringValue(record.Name)].Target = getRecordTarget(record)
 		}
 	}
 
 	return infoMap
 }
 
-//return the Value of the TXT record as stored
+//GetGroupID returns the idenitifier for AWS records as stored in TXT records
 func (c *Client) GetGroupID() string {
 	return fmt.Sprintf("\"mate:%s\"", c.options.GroupID)
 }
 
-func extractRecordTarget(r *route53.ResourceRecordSet) string {
+//GetAssignedTXTRecordObject returns the TXT record which accompanies the Alias record
+func (c *Client) GetAssignedTXTRecordObject(r *route53.ResourceRecordSet) *route53.ResourceRecordSet {
+	return c.createTXTRecordObject(aws.StringValue(r.Name))
+}
+
+func getRecordTarget(r *route53.ResourceRecordSet) string {
 	if r.AliasTarget != nil {
 		return aws.StringValue(r.AliasTarget.DNSName)
 	}
