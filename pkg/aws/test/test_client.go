@@ -3,6 +3,7 @@ package test
 import (
 	"errors"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/zalando-incubator/mate/pkg"
 	awsclient "github.com/zalando-incubator/mate/pkg/aws"
@@ -32,9 +33,22 @@ func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.Resourc
 	var rset []*route53.ResourceRecordSet
 	aliasZoneID := "test"
 	for _, ep := range endpoints {
-		rset = append(rset, c.Client.EndpointToAlias(ep, &aliasZoneID))
+		rset = append(rset, c.endpointToAlias(ep, &aliasZoneID))
 	}
 	return rset, nil
+}
+
+func (c *Client) endpointToAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *route53.ResourceRecordSet {
+	rs := &route53.ResourceRecordSet{
+		Type: aws.String("A"),
+		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
+		AliasTarget: &route53.AliasTarget{
+			DNSName:              aws.String(ep.Hostname),
+			EvaluateTargetHealth: aws.Bool(false),
+			HostedZoneId:         aliasHostedZoneID,
+		},
+	}
+	return rs
 }
 
 func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error {

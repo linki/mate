@@ -29,7 +29,7 @@ func (c *Client) initRoute53Client() (*route53.Route53, error) {
 
 //endpointToAlias ...
 //convert endpoint to an AWS A Alias record
-func (c *Client) EndpointToAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *route53.ResourceRecordSet {
+func (c *Client) endpointToAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
@@ -40,6 +40,16 @@ func (c *Client) EndpointToAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *r
 		},
 	}
 	return rs
+}
+
+func getRecordTarget(r *route53.ResourceRecordSet) string {
+	if aws.StringValue(r.Type) == "TXT" {
+		return ""
+	}
+	if r.AliasTarget != nil {
+		return aws.StringValue(r.AliasTarget.DNSName)
+	}
+	return aws.StringValue(r.ResourceRecords[0].Value)
 }
 
 //getTXTRecord ...
@@ -56,7 +66,7 @@ func (c *Client) createTXTRecordObject(DNSName string) *route53.ResourceRecordSe
 	return rs
 }
 
-func mapChanges(action string, rsets []*route53.ResourceRecordSet) []*route53.Change {
+func createChangesList(action string, rsets []*route53.ResourceRecordSet) []*route53.Change {
 	var changes []*route53.Change
 	for _, rset := range rsets {
 		changes = append(changes, &route53.Change{

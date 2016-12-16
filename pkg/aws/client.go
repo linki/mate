@@ -89,9 +89,9 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 	}
 
 	var changes []*route53.Change
-	changes = append(changes, mapChanges("CREATE", create)...)
-	changes = append(changes, mapChanges("UPSERT", upsert)...)
-	changes = append(changes, mapChanges("DELETE", del)...)
+	changes = append(changes, createChangesList("CREATE", create)...)
+	changes = append(changes, createChangesList("UPSERT", upsert)...)
+	changes = append(changes, createChangesList("DELETE", del)...)
 	if len(changes) > 0 {
 		params := &route53.ChangeResourceRecordSetsInput{
 			ChangeBatch: &route53.ChangeBatch{
@@ -115,7 +115,7 @@ func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.Resourc
 
 	for _, ep := range endpoints {
 		if loadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
-			rset = append(rset, c.EndpointToAlias(ep, aws.String(loadBalancerZoneID)))
+			rset = append(rset, c.endpointToAlias(ep, aws.String(loadBalancerZoneID)))
 		} else {
 			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
 		}
@@ -137,7 +137,7 @@ func (c *Client) RecordInfo(records []*route53.ResourceRecordSet) map[string]*pk
 		}
 	}
 
-	infoMap := map[string]*pkg.RecordInfo{}
+	infoMap := map[string]*pkg.RecordInfo{} //maps record DNS to its GroupID (if exists) and Target (LB)
 	for _, record := range records {
 		groupID := groupIDMap[aws.StringValue(record.Name)]
 		if _, exist := infoMap[aws.StringValue(record.Name)]; !exist {
@@ -161,11 +161,4 @@ func (c *Client) GetGroupID() string {
 //GetAssignedTXTRecordObject returns the TXT record which accompanies the Alias record
 func (c *Client) GetAssignedTXTRecordObject(r *route53.ResourceRecordSet) *route53.ResourceRecordSet {
 	return c.createTXTRecordObject(aws.StringValue(r.Name))
-}
-
-func getRecordTarget(r *route53.ResourceRecordSet) string {
-	if r.AliasTarget != nil {
-		return aws.StringValue(r.AliasTarget.DNSName)
-	}
-	return aws.StringValue(r.ResourceRecords[0].Value)
 }
