@@ -29,14 +29,14 @@ func (c *Client) initRoute53Client() (*route53.Route53, error) {
 
 //endpointToAlias ...
 //convert endpoint to an AWS A Alias record
-func (c *Client) endpointToAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *route53.ResourceRecordSet {
+func (c *Client) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
 		AliasTarget: &route53.AliasTarget{
 			DNSName:              aws.String(ep.Hostname),
 			EvaluateTargetHealth: aws.Bool(evaluateTargetHealth),
-			HostedZoneId:         aliasHostedZoneID,
+			HostedZoneId:         canonicalZoneID,
 		},
 	}
 	return rs

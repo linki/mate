@@ -31,21 +31,21 @@ func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
 
 func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
 	var rset []*route53.ResourceRecordSet
-	aliasZoneID := "test"
+	canonicalZoneID := "test"
 	for _, ep := range endpoints {
-		rset = append(rset, c.endpointToAlias(ep, &aliasZoneID))
+		rset = append(rset, c.endpointToAlias(ep, &canonicalZoneID))
 	}
 	return rset, nil
 }
 
-func (c *Client) endpointToAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *route53.ResourceRecordSet {
+func (c *Client) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
 		AliasTarget: &route53.AliasTarget{
 			DNSName:              aws.String(ep.Hostname),
 			EvaluateTargetHealth: aws.Bool(false),
-			HostedZoneId:         aliasHostedZoneID,
+			HostedZoneId:         canonicalZoneID,
 		},
 	}
 	return rs

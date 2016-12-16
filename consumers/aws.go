@@ -67,10 +67,11 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 
 	var upsert, del []*route53.ResourceRecordSet
 
+	//find records to be upserted
 	for _, newAliasRecord := range newAliasRecords {
 		existingRecordInfo, exist := recordInfoMap[aws.StringValue(newAliasRecord.Name)]
 
-		if !exist { //record does not exist, create with
+		if !exist { //record does not exist, create it
 			newTXTRecord := a.client.GetAssignedTXTRecordObject(newAliasRecord)
 			upsert = append(upsert, newAliasRecord, newTXTRecord)
 			continue
@@ -88,22 +89,25 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 		}
 	}
 
-	for _, record := range existingRecords {
-		recordInfo := recordInfoMap[aws.StringValue(record.Name)]
+	//find records to be removed
+	for _, existingRecord := range existingRecords {
+		recordInfo := recordInfoMap[aws.StringValue(existingRecord.Name)]
 		if recordInfo.GroupID == a.client.GetGroupID() {
 			remove := true
 			for _, newAliasRecord := range newAliasRecords {
-				if aws.StringValue(newAliasRecord.Name) == aws.StringValue(record.Name) {
+				if aws.StringValue(newAliasRecord.Name) == aws.StringValue(existingRecord.Name) {
 					remove = false
 				}
 			}
 			if remove {
-				del = append(del, record)
+				del = append(del, existingRecord)
 			}
 		}
 	}
 
 	if len(upsert) > 0 || len(del) > 0 {
+		log.Debugln("Records to be upserted: ", upsert)
+		log.Debugln("Records to be deleted: ", del)
 		return a.client.ChangeRecordSets(upsert, del, nil)
 	}
 
@@ -113,12 +117,13 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 }
 
 func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
-	alias, err := a.client.EndpointsToAlias([]*pkg.Endpoint{endpoint})
+	aliasRecords, err := a.client.EndpointsToAlias([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
 	}
-	txt := a.client.GetAssignedTXTRecordObject(alias[0])
-	create := []*route53.ResourceRecordSet{alias[0], txt}
+
+	create := []*route53.ResourceRecordSet{aliasRecords[0], a.client.GetAssignedTXTRecordObject(aliasRecords[0])}
+
 	err = a.client.ChangeRecordSets(nil, nil, create)
 	if err != nil && strings.Contains(err.Error(), "it already exists") {
 		log.Warnf("Record [name=%s] could not be created, another record with same name already exists", endpoint.DNSName)
