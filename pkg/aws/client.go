@@ -123,8 +123,9 @@ func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRec
 	return rset, nil
 }
 
-func (c *Client) RecordMap(records []*route53.ResourceRecordSet) map[string]string {
-	recordMap := make(map[string]string)
+//RecordInfo returns the map of record assigned dns to its target and groupID (can be empty)
+func (c *Client) RecordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo {
+	recordMap := map[string]string{}
 
 	for _, record := range records {
 		if (aws.StringValue(record.Type)) == "TXT" {
@@ -136,10 +137,29 @@ func (c *Client) RecordMap(records []*route53.ResourceRecordSet) map[string]stri
 		}
 	}
 
-	return recordMap
+	infoMap := map[string]*pkg.RecordInfo{}
+	for _, record := range records {
+		groupID := recordMap[aws.StringValue(record.Name)]
+		if (aws.StringValue(record.Type)) == "TXT" {
+			continue
+		}
+		infoMap[aws.StringValue(record.Name)] = &pkg.RecordInfo{
+			GroupID: groupID,
+			Target:  extractRecordTarget(record),
+		}
+	}
+
+	return infoMap
 }
 
 //return the Value of the TXT record as stored
 func (c *Client) GetGroupID() string {
 	return fmt.Sprintf("\"mate:%s\"", c.options.GroupID)
+}
+
+func extractRecordTarget(r *route53.ResourceRecordSet) string {
+	if r.AliasTarget != nil {
+		return aws.StringValue(r.AliasTarget.DNSName)
+	}
+	return aws.StringValue(r.ResourceRecords[0].Value)
 }

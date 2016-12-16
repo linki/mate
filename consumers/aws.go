@@ -20,7 +20,7 @@ type AWSClient interface {
 	ListRecordSets() ([]*route53.ResourceRecordSet, error)
 	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error
 	MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error)
-	RecordMap(records []*route53.ResourceRecordSet) map[string]string
+	RecordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo
 	GetGroupID() string
 }
 
@@ -58,7 +58,7 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 		return err
 	}
 
-	recordMap := a.client.RecordMap(records)
+	recordMap := a.client.RecordInfo(records)
 
 	next, err := a.client.MapEndpoints(endpoints)
 	if err != nil {
@@ -68,26 +68,27 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 	var upsert, del []*route53.ResourceRecordSet
 
 	for _, endpoint := range next {
-		groupID, exist := recordMap[aws.StringValue(endpoint.Name)]
+		recordInfo, exist := recordMap[aws.StringValue(endpoint.Name)]
 
 		if !exist { //record does not exist, create it
 			upsert = append(upsert, endpoint)
 			continue
 		}
 
-		if groupID != a.client.GetGroupID() { // there exist a record with a different or empty group ID
-			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(endpoint.Name), groupID)
+		if recordInfo.GroupID != a.client.GetGroupID() { // there exist a record with a different or empty group ID
+			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(endpoint.Name), recordInfo.GroupID)
 			continue
 		}
 
-		//make sure record really requires update, not to spam AWS route53 api with dummy updates
-		if 
-		2
+		//make sure record only updated when target changes, not to spam AWS route53 api with dummy updates
+		if recordInfo.Target != aws.StringValue(endpoint.AliasTarget.DNSName) {
+			upsert = append(upsert, endpoint)
+		}
 	}
 
 	for _, record := range records {
-		groupID := recordMap[aws.StringValue(record.Name)]
-		if groupID == a.client.GetGroupID() {
+		recordInfo := recordMap[aws.StringValue(record.Name)]
+		if recordInfo.GroupID == a.client.GetGroupID() {
 			remove := true
 			for _, endpoint := range next {
 				if aws.StringValue(endpoint.Name) == aws.StringValue(record.Name) {
