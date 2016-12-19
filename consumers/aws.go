@@ -69,7 +69,7 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 
 	inputByZoneID := map[string][]*route53.ResourceRecordSet{}
 	for _, record := range newAliasRecords {
-		zoneID := getZoneIDForEndpoint(hostedZonesMap, record)
+		zoneID := getZoneIDForEndpoint(hostedZonesMap, record) //this guarantees that the endpoint will not be created in multiple hosted zones
 		if zoneID == "" {
 			log.Infof("Hosted zone for endpoint: %s is not found. Skipping record...", record.Name)
 			continue
@@ -183,11 +183,13 @@ func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
 	return err
 }
 
+//getZoneIDForEndpoint returns the zone id for the record based on its dns name, returns best match
 func getZoneIDForEndpoint(hostedZonesMap map[string]string, record *route53.ResourceRecordSet) string {
+	var match string
 	for zoneName, zoneID := range hostedZonesMap {
-		if strings.HasSuffix(aws.StringValue(record.Name), zoneName) { // speicified DNS does not match the hosted zones domain
-			return zoneID
+		if strings.HasSuffix(aws.StringValue(record.Name), zoneName) && len(zoneName) > len(match) { // speicified DNS does not match the hosted zones domain
+			match = zoneID
 		}
 	}
-	return ""
+	return match
 }
