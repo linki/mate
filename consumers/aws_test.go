@@ -47,7 +47,8 @@ func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*route53.Res
 		var found bool
 		for _, eep := range expect {
 			if *ep.Type == "A" {
-				if *eep.Type == "A" && *eep.AliasTarget.DNSName == *ep.AliasTarget.DNSName && *ep.Name == *eep.Name {
+				if *eep.Type == "A" && pkg.SanitizeDNSName(*eep.AliasTarget.DNSName) == pkg.SanitizeDNSName(*ep.AliasTarget.DNSName) &&
+					*ep.Name == *eep.Name {
 					found = true
 				}
 				continue

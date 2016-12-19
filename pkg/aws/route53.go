@@ -34,7 +34,7 @@ func (c *Client) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *rou
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
 		AliasTarget: &route53.AliasTarget{
-			DNSName:              aws.String(ep.Hostname),
+			DNSName:              aws.String(pkg.SanitizeDNSName(ep.Hostname)),
 			EvaluateTargetHealth: aws.Bool(evaluateTargetHealth),
 			HostedZoneId:         canonicalZoneID,
 		},

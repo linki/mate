@@ -83,7 +83,7 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 		}
 
 		// make sure record only updated when target changes, not to spam AWS route53 API with dummy updates
-		if existingRecordInfo.Target != aws.StringValue(newAliasRecord.AliasTarget.DNSName) {
+		if pkg.SanitizeDNSName(existingRecordInfo.Target) != aws.StringValue(newAliasRecord.AliasTarget.DNSName) {
 			newTXTRecord := a.client.GetAssignedTXTRecordObject(newAliasRecord)
 			upsert = append(upsert, newAliasRecord, newTXTRecord)
 		}

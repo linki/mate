@@ -22,7 +22,7 @@ func TestEndpointToAlias(t *testing.T) {
 	}
 	rsA := client.endpointToAlias(ep, &zoneID)
 	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
-		*rsA.AliasTarget.DNSName != ep.Hostname ||
+		*rsA.AliasTarget.DNSName != pkg.SanitizeDNSName(ep.Hostname) ||
 		*rsA.AliasTarget.HostedZoneId != zoneID {
 		t.Error("Should create an A record")
 	}
