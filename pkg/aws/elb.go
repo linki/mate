@@ -1,15 +1,21 @@
 package aws
 
 import (
-	"strings"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elb"
+	"github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/zalando-incubator/mate/pkg"
 )
 
-func (c *Client) initELBClient() (*elb.ELB, error) {
+//LoadBalancer struct to aggregate ELB and ALB with extracted DNSName and its canonical hosted zone id
+type LoadBalancer struct {
+	DNSName         string
+	CanonicalZoneID string
+}
+
+//getCanonicalZoneIDs returns the map of LB (ALB + ELB classic) mapped to its CanonicalHostedZoneId
+func (c *Client) getCanonicalZoneIDs(endpoints []*pkg.Endpoint) (map[string]string, error) {
 	session, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 		Config: aws.Config{
@@ -20,42 +26,65 @@ func (c *Client) initELBClient() (*elb.ELB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return elb.New(session), nil
-}
 
-func (c *Client) getELBDescriptions(eps []*pkg.Endpoint) ([]*elb.LoadBalancerDescription, error) {
-	client, err := c.initELBClient()
+	albs, err := c.getALBs(session)
 	if err != nil {
 		return nil, err
 	}
-	var names []*string
-	for _, ep := range eps {
-		elbName := extractELBName(ep.Hostname)
-		names = append(names, aws.String(elbName))
-	}
-	params := &elb.DescribeLoadBalancersInput{
-		LoadBalancerNames: names,
-		// PageSize:          aws.Int64(1), use default 400 records
-	}
-	resp, err := client.DescribeLoadBalancers(params)
+
+	elbs, err := c.getELBs(session)
 	if err != nil {
 		return nil, err
 	}
-	return resp.LoadBalancerDescriptions, nil
-}
 
-func getELBZoneID(ep *pkg.Endpoint, elbs []*elb.LoadBalancerDescription) *string {
-	for _, elb := range elbs {
-		if ep.Hostname == aws.StringValue(elb.DNSName) {
-			return elb.CanonicalHostedZoneNameID
+	loadBalancers := append(albs, elbs...)
+	loadBalancersMap := map[string]string{} //map LB Dns to its canonical hosted zone id
+
+	for _, endpoint := range endpoints {
+		for _, loadBalancer := range loadBalancers {
+			if endpoint.Hostname == loadBalancer.DNSName {
+				loadBalancersMap[endpoint.Hostname] = loadBalancer.CanonicalZoneID
+			}
 		}
 	}
-	return nil
+
+	return loadBalancersMap, nil
 }
 
-func extractELBName(dns string) string {
-	dns = strings.TrimPrefix(dns, "internal-") // internal elb
-	lastLvlDomain := dns[:strings.Index(dns, ".")]
-	timestampIndex := strings.LastIndex(lastLvlDomain, "-")
-	return dns[:timestampIndex]
+func (c *Client) getELBs(session *session.Session) ([]*LoadBalancer, error) {
+	client := elb.New(session)
+
+	resp, err := client.DescribeLoadBalancers(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	loadBalancers := resp.LoadBalancerDescriptions
+	result := make([]*LoadBalancer, len(loadBalancers))
+	for i, loadbalancer := range loadBalancers {
+		result[i] = &LoadBalancer{
+			DNSName:         aws.StringValue(loadbalancer.DNSName),
+			CanonicalZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneNameID),
+		}
+	}
+	return result, nil
+}
+
+func (c *Client) getALBs(session *session.Session) ([]*LoadBalancer, error) {
+	client := elbv2.New(session)
+
+	resp, err := client.DescribeLoadBalancers(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	loadBalancers := resp.LoadBalancers
+	result := make([]*LoadBalancer, len(loadBalancers))
+	for i, loadbalancer := range loadBalancers {
+		result[i] = &LoadBalancer{
+			DNSName:         aws.StringValue(loadbalancer.DNSName),
+			CanonicalZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneId),
+		}
+	}
+	return result, nil
 }

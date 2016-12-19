@@ -1,8 +1,6 @@
 package aws
 
 import (
-	"errors"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
@@ -29,27 +27,37 @@ func (c *Client) initRoute53Client() (*route53.Route53, error) {
 	return route53.New(session), nil
 }
 
-//MapEndpointAlias ...
-//create an AWS A Alias record
-func (c *Client) MapEndpointAlias(ep *pkg.Endpoint, aliasHostedZoneID *string) *route53.ResourceRecordSet {
+//endpointToAlias ...
+//convert endpoint to an AWS A Alias record
+func (c *Client) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
 		AliasTarget: &route53.AliasTarget{
-			DNSName:              aws.String(ep.Hostname),
+			DNSName:              aws.String(pkg.SanitizeDNSName(ep.Hostname)),
 			EvaluateTargetHealth: aws.Bool(evaluateTargetHealth),
-			HostedZoneId:         aliasHostedZoneID,
+			HostedZoneId:         canonicalZoneID,
 		},
 	}
 	return rs
 }
 
-//MapEndpointTXT ...
-//create an AWS TXT record
-func (c *Client) MapEndpointTXT(ep *pkg.Endpoint) *route53.ResourceRecordSet {
+func getRecordTarget(r *route53.ResourceRecordSet) string {
+	if aws.StringValue(r.Type) == "TXT" {
+		return ""
+	}
+	if r.AliasTarget != nil {
+		return aws.StringValue(r.AliasTarget.DNSName)
+	}
+	return aws.StringValue(r.ResourceRecords[0].Value)
+}
+
+//getTXTRecord ...
+//gets AWS TXT Record Resource object for a given DNS entry
+func (c *Client) createTXTRecordObject(DNSName string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("TXT"),
-		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
+		Name: aws.String(pkg.SanitizeDNSName(DNSName)),
 		TTL:  aws.Int64(defaultTxtTTL),
 		ResourceRecords: []*route53.ResourceRecord{{
 			Value: aws.String(c.GetGroupID()),
@@ -58,9 +66,7 @@ func (c *Client) MapEndpointTXT(ep *pkg.Endpoint) *route53.ResourceRecordSet {
 	return rs
 }
 
-// mapChanges ...
-// create a change batch per action
-func mapChanges(action string, rsets []*route53.ResourceRecordSet) []*route53.Change {
+func createChangesList(action string, rsets []*route53.ResourceRecordSet) []*route53.Change {
 	var changes []*route53.Change
 	for _, rset := range rsets {
 		changes = append(changes, &route53.Change{
@@ -69,28 +75,4 @@ func mapChanges(action string, rsets []*route53.ResourceRecordSet) []*route53.Ch
 		})
 	}
 	return changes
-}
-
-// GetHostedZones ...
-// returns the map hosted zone name -> zone id
-func (c *Client) GetHostedZones() (map[string]string, error) {
-	client, err := c.initRoute53Client()
-	if err != nil {
-		return nil, err
-	}
-
-	output, err := client.ListHostedZones(nil)
-	if err != nil {
-		return nil, err
-	}
-	if len(output.HostedZones) == 0 {
-		return nil, errors.New("No hosted zones found")
-	}
-
-	result := map[string]string{}
-	for _, zone := range output.HostedZones {
-		result[aws.StringValue(zone.Name)] = aws.StringValue(zone.Id)
-	}
-
-	return result, nil
 }
