@@ -27,9 +27,8 @@ func (l defaultLog) Infoln(args ...interface{}) {
 }
 
 type Options struct {
-	HostedZone string
-	Log        Logger
-	GroupID    string
+	Log     Logger
+	GroupID string
 }
 
 type Client struct {
