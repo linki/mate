@@ -7,8 +7,9 @@ import (
 
 func getHostedZones() map[string]string {
 	return map[string]string{
-		"example.com.": "example.com.",
-		"foo.com.":     "foo.com.",
+		"example.com.":     "example.com.",
+		"foo.com.":         "foo.com.",
+		"sub.example.com.": "sub.example.com.",
 	}
 }
 

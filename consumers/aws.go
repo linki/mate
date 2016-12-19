@@ -184,10 +184,12 @@ func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
 }
 
 //getZoneIDForEndpoint returns the zone id for the record based on its dns name, returns best match
+//i.e. if the record has dns name "test.sub.example.com" and route53 has two hosted zones "example.com" and "sub.example.com"
+//"sub.example.com" will be returned
 func getZoneIDForEndpoint(hostedZonesMap map[string]string, record *route53.ResourceRecordSet) string {
 	var match string
 	for zoneName, zoneID := range hostedZonesMap {
-		if strings.HasSuffix(aws.StringValue(record.Name), zoneName) && len(zoneName) > len(match) { // speicified DNS does not match the hosted zones domain
+		if strings.HasSuffix(aws.StringValue(record.Name), zoneName) && len(zoneName) > len(match) { //get the longest match for the dns name
 			match = zoneID
 		}
 	}

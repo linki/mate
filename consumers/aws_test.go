@@ -127,8 +127,25 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 				{
 					"withouttxt.example.com", "", "random.com",
 				},
+				{
+					"nest.sub.example.com", "", "nested.elb",
+				},
 			},
 			expectUpsert: map[string][]*route53.ResourceRecordSet{
+				"sub.example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("nest.sub.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("nested.elb"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("nest.sub.example.com."),
+					},
+				},
 				"example.com.": []*route53.ResourceRecordSet{
 					&route53.ResourceRecordSet{
 						Type: aws.String("A"),
