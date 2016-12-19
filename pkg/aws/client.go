@@ -89,9 +89,9 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 	}
 
 	var changes []*route53.Change
-	changes = append(changes, mapChanges("CREATE", create)...)
-	changes = append(changes, mapChanges("UPSERT", upsert)...)
-	changes = append(changes, mapChanges("DELETE", del)...)
+	changes = append(changes, createChangesList("CREATE", create)...)
+	changes = append(changes, createChangesList("UPSERT", upsert)...)
+	changes = append(changes, createChangesList("DELETE", del)...)
 	if len(changes) > 0 {
 		params := &route53.ChangeResourceRecordSetsInput{
 			ChangeBatch: &route53.ChangeBatch{
@@ -105,7 +105,8 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 	return nil
 }
 
-func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
+//EndpointsToAlias converts pkg Endpoint to route53 Alias Records
+func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
 	zoneIDs, err := c.getCanonicalZoneIDs(endpoints)
 	if err != nil {
 		return nil, err
@@ -113,9 +114,8 @@ func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRec
 	var rset []*route53.ResourceRecordSet
 
 	for _, ep := range endpoints {
-		if LoadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
-			rset = append(rset, c.MapEndpointAlias(ep, aws.String(LoadBalancerZoneID)))
-			rset = append(rset, c.MapEndpointTXT(ep))
+		if loadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
+			rset = append(rset, c.endpointToAlias(ep, aws.String(loadBalancerZoneID)))
 		} else {
 			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
 		}
@@ -123,23 +123,42 @@ func (c *Client) MapEndpoints(endpoints []*pkg.Endpoint) ([]*route53.ResourceRec
 	return rset, nil
 }
 
-func (c *Client) RecordMap(records []*route53.ResourceRecordSet) map[string]string {
-	recordMap := make(map[string]string)
+//RecordInfo returns the map of record assigned dns to its target and groupID (can be empty)
+func (c *Client) RecordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo {
+	groupIDMap := map[string]string{} //maps dns to group ID
 
 	for _, record := range records {
 		if (aws.StringValue(record.Type)) == "TXT" {
-			recordMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
+			groupIDMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
 		} else {
-			if _, exist := recordMap[aws.StringValue(record.Name)]; !exist {
-				recordMap[aws.StringValue(record.Name)] = ""
+			if _, exist := groupIDMap[aws.StringValue(record.Name)]; !exist {
+				groupIDMap[aws.StringValue(record.Name)] = ""
 			}
 		}
 	}
 
-	return recordMap
+	infoMap := map[string]*pkg.RecordInfo{} //maps record DNS to its GroupID (if exists) and Target (LB)
+	for _, record := range records {
+		groupID := groupIDMap[aws.StringValue(record.Name)]
+		if _, exist := infoMap[aws.StringValue(record.Name)]; !exist {
+			infoMap[aws.StringValue(record.Name)] = &pkg.RecordInfo{
+				GroupID: groupID,
+			}
+		}
+		if aws.StringValue(record.Type) != "TXT" {
+			infoMap[aws.StringValue(record.Name)].Target = getRecordTarget(record)
+		}
+	}
+
+	return infoMap
 }
 
-//return the Value of the TXT record as stored
+//GetGroupID returns the idenitifier for AWS records as stored in TXT records
 func (c *Client) GetGroupID() string {
 	return fmt.Sprintf("\"mate:%s\"", c.options.GroupID)
+}
+
+//GetAssignedTXTRecordObject returns the TXT record which accompanies the Alias record
+func (c *Client) GetAssignedTXTRecordObject(r *route53.ResourceRecordSet) *route53.ResourceRecordSet {
+	return c.createTXTRecordObject(aws.StringValue(r.Name))
 }
