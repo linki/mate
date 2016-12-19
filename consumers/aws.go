@@ -7,6 +7,8 @@ import (
 
 	"strings"
 
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
@@ -17,12 +19,13 @@ import (
 // Implementations provide access to AWS Route53 API's
 // required calls.
 type AWSClient interface {
-	ListRecordSets() ([]*route53.ResourceRecordSet, error)
-	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error
+	ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error)
+	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error
 	EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error)
 	RecordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo
 	GetGroupID() string
 	GetAssignedTXTRecordObject(record *route53.ResourceRecordSet) *route53.ResourceRecordSet
+	GetHostedZones() (map[string]string, error)
 }
 
 type awsClient struct {
@@ -54,16 +57,53 @@ func withClient(c AWSClient) *awsClient {
 }
 
 func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
-	existingRecords, err := a.client.ListRecordSets()
+	newAliasRecords, err := a.client.EndpointsToAlias(endpoints)
+	if err != nil {
+		return err
+	}
+
+	hostedZonesMap, err := a.client.GetHostedZones()
+	if err != nil {
+		return err
+	}
+
+	inputByZoneID := map[string][]*route53.ResourceRecordSet{}
+	for _, record := range newAliasRecords {
+		zoneID := getZoneIDForEndpoint(hostedZonesMap, record)
+		if zoneID == "" {
+			log.Infof("Hosted zone for endpoint: %s is not found. Skipping record...", record.Name)
+			continue
+		}
+		inputByZoneID[zoneID] = append(inputByZoneID[zoneID], record)
+	}
+
+	var wg sync.WaitGroup
+	for zoneName, zoneID := range hostedZonesMap {
+		if len(inputByZoneID[zoneID]) > 0 {
+			wg.Add(1)
+			zoneID := zoneID
+			go func() {
+				defer wg.Done()
+				err := a.syncPerHostedZone(inputByZoneID[zoneID], zoneID)
+				if err != nil {
+					//pass the err down the error channel
+					//for now just log
+					log.Errorf("Error changing records per zone: %s", zoneName)
+				}
+			}()
+		}
+	}
+	wg.Wait()
+	return nil
+}
+
+func (a *awsClient) syncPerHostedZone(newAliasRecords []*route53.ResourceRecordSet, zoneID string) error {
+	existingRecords, err := a.client.ListRecordSets(zoneID)
 	if err != nil {
 		return err
 	}
 
 	recordInfoMap := a.client.RecordInfo(existingRecords)
-	newAliasRecords, err := a.client.EndpointsToAlias(endpoints)
-	if err != nil {
-		return err
-	}
 
 	var upsert, del []*route53.ResourceRecordSet
 
@@ -108,15 +148,19 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 	if len(upsert) > 0 || len(del) > 0 {
 		log.Debugln("Records to be upserted: ", upsert)
 		log.Debugln("Records to be deleted: ", del)
-		return a.client.ChangeRecordSets(upsert, del, nil)
+		return a.client.ChangeRecordSets(upsert, del, nil, zoneID)
 	}
 
 	log.Infoln("No changes submitted")
-
 	return nil
 }
 
 func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
+	hostedZonesMap, err := a.client.GetHostedZones()
+	if err != nil {
+		return err
+	}
+
 	aliasRecords, err := a.client.EndpointsToAlias([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
@@ -124,10 +168,25 @@ func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
 
 	create := []*route53.ResourceRecordSet{aliasRecords[0], a.client.GetAssignedTXTRecordObject(aliasRecords[0])}
 
-	err = a.client.ChangeRecordSets(nil, nil, create)
-	if err != nil && strings.Contains(err.Error(), "it already exists") {
+	zoneID := getZoneIDForEndpoint(hostedZonesMap, aliasRecords[0])
+	if zoneID == "" {
+		log.Infof("Hosted zone for endpoint: %s is not found. Skipping record...", endpoint.DNSName)
+	}
+
+	err = a.client.ChangeRecordSets(nil, nil, create, zoneID)
+	if err != nil && strings.Contains(err.Error(), "already exists") {
 		log.Warnf("Record [name=%s] could not be created, another record with same name already exists", endpoint.DNSName)
 		return nil
 	}
+
 	return err
+}
+
+func getZoneIDForEndpoint(hostedZonesMap map[string]string, record *route53.ResourceRecordSet) string {
+	for zoneName, zoneID := range hostedZonesMap {
+		if strings.HasSuffix(aws.StringValue(record.Name), zoneName) { // speicified DNS does not match the hosted zones domain
+			return zoneID
+		}
+	}
+	return ""
 }
