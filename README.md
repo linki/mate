@@ -59,8 +59,17 @@ Analogous to the AWS case with the difference that it doesn't use the AWS specif
 
 ### Kubernetes
 
-By default Mate will retrieve the list of services from the Kubernetes API server via `http://127.0.0.1:8001` (for local testing use `kubectl proxy`), however the API server url can be configured with the `kubernetes-server` flag.
-Mate will listen for events from the API Server and creates corresponding records for newly created services. Further synchronization (create, update and removal) will occur every minute. There's an initial syncronization when Mate boots up so it's safe to reboot the process at any point in time. If you only like to do the synchronization you can use the `sync-only` flag.
+Mate will listen for events from the API Server and create corresponding
+records for newly created services. Further synchronization (create, update and
+removal) will occur every minute. There's an initial syncronization when Mate
+boots up so it's safe to reboot the process at any point in time. If you only
+like to do the synchronization you can use the `sync-only` flag.
+
+By default Mate uses the in cluster environment to configure the connection to
+the API server. When running outside a cluster it is possible to configure the
+API server url using the flag `kubernetes-server`. For instance you can run
+Mate locally with the server URL set to `http://127.0.0.1:8001` and use
+`kubectl proxy` to forward requests to a cluster.
 
 # Producers and Consumers
 
