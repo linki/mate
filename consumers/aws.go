@@ -170,7 +170,8 @@ func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
 
 	zoneID := getZoneIDForEndpoint(hostedZonesMap, aliasRecords[0])
 	if zoneID == "" {
-		log.Infof("Hosted zone for endpoint: %s is not found. Skipping record...", endpoint.DNSName)
+		log.Errorf("Hosted zone for endpoint: %s is not found. Skipping record...", endpoint.DNSName)
+		return nil
 	}
 
 	err = a.client.ChangeRecordSets(nil, nil, create, zoneID)
