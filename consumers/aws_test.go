@@ -87,16 +87,24 @@ func testAWSConsumer(t *testing.T, ti awsTestItem) {
 			return
 		}
 	}
-
+	if len(client.LastUpsert) != len(ti.expectUpsert) {
+		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
+	}
 	for zoneName := range ti.expectUpsert {
 		if !checkEndpointSlices(client.LastUpsert[zoneName], ti.expectUpsert[zoneName]) {
 			t.Error("failed to post the right upsert items", client.LastUpsert[zoneName], ti.expectUpsert[zoneName])
 		}
 	}
+	if len(client.LastCreate) != len(ti.expectCreate) {
+		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
+	}
 	for zoneName := range ti.expectCreate {
 		if !checkEndpointSlices(client.LastCreate[zoneName], ti.expectCreate[zoneName]) {
 			t.Error("failed to post the right create items", client.LastCreate[zoneName], ti.expectCreate[zoneName])
 		}
+	}
+	if len(client.LastDelete) != len(ti.expectDelete) {
+		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
 	}
 	for zoneName := range ti.expectDelete {
 		if !checkEndpointSlices(client.LastDelete[zoneName], ti.expectDelete[zoneName]) {
@@ -218,9 +226,26 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 				"new.example.com", "", "qux.elb",
 			}, {
 				"test.example.com", "", "foo.elb2",
-			},
-			},
+			}, {
+				"test.foo.com", "", "foo.loadbalancer", //skip it
+			}, {
+				"update.foo.com", "", "new.loadbalancer",
+			}},
 			expectUpsert: map[string][]*route53.ResourceRecordSet{
+				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.foo.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("new.loadbalancer"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.foo.com."),
+					},
+				},
 				"example.com.": []*route53.ResourceRecordSet{
 					&route53.ResourceRecordSet{
 						Type: aws.String("A"),

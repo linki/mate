@@ -69,10 +69,15 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 		return err
 	}
 
-	c.LastCreate[zoneID] = create
-	c.LastDelete[zoneID] = del
-	c.LastUpsert[zoneID] = upsert
-
+	if len(create) > 0 {
+		c.LastCreate[zoneID] = create
+	}
+	if len(del) > 0 {
+		c.LastDelete[zoneID] = del
+	}
+	if len(upsert) > 0 {
+		c.LastUpsert[zoneID] = upsert
+	}
 	return nil
 }
 

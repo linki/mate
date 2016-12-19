@@ -8,11 +8,39 @@ import (
 func getHostedZones() map[string]string {
 	return map[string]string{
 		"example.com.": "example.com.",
+		"foo.com.":     "foo.com.",
 	}
 }
 
 func getOriginalState(groupID string) map[string][]*route53.ResourceRecordSet {
 	return map[string][]*route53.ResourceRecordSet{
+		"foo.com.": []*route53.ResourceRecordSet{
+			&route53.ResourceRecordSet{
+				Type: aws.String("A"),
+				Name: aws.String("test.foo.com."),
+				AliasTarget: &route53.AliasTarget{
+					DNSName:      aws.String("404.elb.com"),
+					HostedZoneId: aws.String("123"),
+				},
+			},
+			&route53.ResourceRecordSet{
+				Type: aws.String("A"),
+				Name: aws.String("update.foo.com."),
+				AliasTarget: &route53.AliasTarget{
+					DNSName:      aws.String("404.elb.com"),
+					HostedZoneId: aws.String("123"),
+				},
+			},
+			&route53.ResourceRecordSet{
+				Type: aws.String("TXT"),
+				Name: aws.String("update.foo.com."),
+				ResourceRecords: []*route53.ResourceRecord{
+					&route53.ResourceRecord{
+						Value: aws.String(groupID),
+					},
+				},
+			},
+		},
 		"example.com.": []*route53.ResourceRecordSet{
 			&route53.ResourceRecordSet{
 				Type: aws.String("A"),
