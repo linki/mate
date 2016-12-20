@@ -1,0 +1,20 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: test
+spec:
+  rules:
+  - host: foo-app.foo.com
+    http:
+      paths:
+      - path: /foo
+        backend:
+          serviceName: fooSvc
+          servicePort: 80
+  - host: bar-app.example.com
+    http:
+      paths:
+      - path: /bar
+        backend:
+          serviceName: barSvc
+          servicePort: 80
