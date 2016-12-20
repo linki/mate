@@ -46,8 +46,7 @@ func New(o Options) *Client {
 	return &Client{o}
 }
 
-//ListRecordSets ...
-//retrieve A records filtered by aws group id
+//ListRecordSets retrieve all records existing in the specified hosted zone
 func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error) {
 	client, err := c.initRoute53Client()
 	if err != nil {
@@ -70,8 +69,7 @@ func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, er
 	return rsp.ResourceRecordSets, nil
 }
 
-//ChangeRecordSets ...
-//creates and submits the record set change against the AWS API
+//ChangeRecordSets creates and submits the record set change against the AWS API
 func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error {
 	client, err := c.initRoute53Client()
 	if err != nil {
@@ -153,8 +151,7 @@ func (c *Client) GetAssignedTXTRecordObject(r *route53.ResourceRecordSet) *route
 	return c.createTXTRecordObject(aws.StringValue(r.Name))
 }
 
-// GetHostedZones ...
-// returns the map hosted zone domain name -> zone id
+// GetHostedZones returns the map hosted zone domain name -> zone id
 func (c *Client) GetHostedZones() (map[string]string, error) {
 	client, err := c.initRoute53Client()
 	if err != nil {
@@ -164,9 +161,6 @@ func (c *Client) GetHostedZones() (map[string]string, error) {
 	output, err := client.ListHostedZones(nil)
 	if err != nil {
 		return nil, err
-	}
-	if len(output.HostedZones) == 0 {
-		return nil, errors.New("No hosted zones found")
 	}
 
 	hostedZoneMap := map[string]string{}

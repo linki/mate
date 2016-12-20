@@ -61,12 +61,16 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 	if err != nil {
 		return err
 	}
+	if len(hostedZonesMap) == 0 {
+		log.Warnln("No hosted zones found in Route53. At least one hosted zone should be created to create DNS records...")
+		return nil
+	}
 
 	inputByZoneID := map[string][]*route53.ResourceRecordSet{}
 	for _, record := range newAliasRecords {
 		zoneID := getZoneIDForEndpoint(hostedZonesMap, record) //this guarantees that the endpoint will not be created in multiple hosted zones
 		if zoneID == "" {
-			log.Infof("Hosted zone for endpoint: %s is not found. Skipping record...", record.Name)
+			log.Warnf("Hosted zone for endpoint: %s is not found. Skipping record...", aws.StringValue(record.Name))
 			continue
 		}
 		inputByZoneID[zoneID] = append(inputByZoneID[zoneID], record)
@@ -81,7 +85,7 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 				defer wg.Done()
 				err := a.syncPerHostedZone(inputByZoneID[zoneID], zoneID)
 				if err != nil {
-					//pass the err down the error channel
+					//should pass the err down the error channel
 					//for now just log
 					log.Errorf("Error changing records per zone: %s", zoneName)
 				}
@@ -165,7 +169,7 @@ func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
 
 	zoneID := getZoneIDForEndpoint(hostedZonesMap, aliasRecords[0])
 	if zoneID == "" {
-		log.Errorf("Hosted zone for endpoint: %s is not found. Skipping record...", endpoint.DNSName)
+		log.Warnf("Hosted zone for endpoint: %s is not found. Skipping record...", endpoint.DNSName)
 		return nil
 	}
 
