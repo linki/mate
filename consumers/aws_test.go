@@ -6,19 +6,17 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/zalando-incubator/mate/pkg"
-	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 	awstest "github.com/zalando-incubator/mate/pkg/aws/test"
 )
 
 type awsTestItem struct {
 	msg          string
-	init         []*route53.ResourceRecordSet
 	sync         []*pkg.Endpoint
 	process      *pkg.Endpoint
 	fail         bool
-	expectCreate []*route53.ResourceRecordSet
-	expectUpsert []*route53.ResourceRecordSet
-	expectDelete []*route53.ResourceRecordSet
+	expectCreate map[string][]*route53.ResourceRecordSet
+	expectUpsert map[string][]*route53.ResourceRecordSet
+	expectDelete map[string][]*route53.ResourceRecordSet
 	expectFail   bool
 }
 
@@ -70,101 +68,12 @@ func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*route53.Res
 }
 
 func testAWSConsumer(t *testing.T, ti awsTestItem) {
-
 	groupID := "testing-group-id"
-	client := &awstest.Client{
-		Current: ti.init,
-		Client: awsclient.New(awsclient.Options{
-			GroupID: groupID,
-		}),
-		Options: awstest.Options{
-			HostedZone:   "test",
-			RecordSetTTL: 10,
-			GroupID:      groupID,
-		}}
+	client := awstest.NewClient(groupID)
 	if ti.fail {
 		client.FailNext()
 	}
-	init := []*route53.ResourceRecordSet{
-		&route53.ResourceRecordSet{
-			Type: aws.String("A"),
-			Name: aws.String("test.example.com."),
-			AliasTarget: &route53.AliasTarget{
-				DNSName:      aws.String("404.elb.com"),
-				HostedZoneId: aws.String("123"),
-			},
-		},
-		&route53.ResourceRecordSet{
-			Type: aws.String("TXT"),
-			Name: aws.String("test.example.com."),
-			ResourceRecords: []*route53.ResourceRecord{
-				&route53.ResourceRecord{
-					Value: aws.String(client.Client.GetGroupID()),
-				},
-			},
-		},
-		&route53.ResourceRecordSet{
-			Type: aws.String("A"),
-			Name: aws.String("update.example.com."),
-			AliasTarget: &route53.AliasTarget{
-				DNSName:      aws.String("302.elb.com"),
-				HostedZoneId: aws.String("123"),
-			},
-		},
-		&route53.ResourceRecordSet{
-			Type: aws.String("TXT"),
-			Name: aws.String("update.example.com."),
-			ResourceRecords: []*route53.ResourceRecord{
-				&route53.ResourceRecord{
-					Value: aws.String(client.Client.GetGroupID()),
-				},
-			},
-		},
-		&route53.ResourceRecordSet{
-			Type: aws.String("A"),
-			Name: aws.String("another.example.com."),
-			AliasTarget: &route53.AliasTarget{
-				DNSName:      aws.String("200.elb.com"),
-				HostedZoneId: aws.String("123"),
-			},
-		},
-		&route53.ResourceRecordSet{
-			Type: aws.String("TXT"),
-			Name: aws.String("another.example.com."),
-			ResourceRecords: []*route53.ResourceRecord{
-				&route53.ResourceRecord{
-					Value: aws.String("ignored"),
-				},
-			},
-		},
-		&route53.ResourceRecordSet{
-			Type: aws.String("CNAME"),
-			Name: aws.String("cname.example.com."),
-			ResourceRecords: []*route53.ResourceRecord{
-				&route53.ResourceRecord{
-					Value: aws.String("some-elb.amazon.com"),
-				},
-			},
-		},
-		&route53.ResourceRecordSet{
-			Type: aws.String("TXT"),
-			Name: aws.String("withoutA.example.com."),
-			ResourceRecords: []*route53.ResourceRecord{
-				&route53.ResourceRecord{
-					Value: aws.String("lonely"),
-				},
-			},
-		},
-		&route53.ResourceRecordSet{
-			Type: aws.String("A"),
-			Name: aws.String("withouttxt.example.com."),
-			AliasTarget: &route53.AliasTarget{
-				DNSName:      aws.String("random.elb.com"),
-				HostedZoneId: aws.String("123"),
-			},
-		},
-	}
-	client.Current = init
+
 	consumer := withClient(client)
 
 	if ti.process == nil {
@@ -178,16 +87,29 @@ func testAWSConsumer(t *testing.T, ti awsTestItem) {
 			return
 		}
 	}
-
-	if !checkEndpointSlices(client.LastUpsert, ti.expectUpsert) {
-		t.Error("failed to post the right upsert items", client.LastUpsert, ti.expectUpsert)
+	if len(client.LastUpsert) != len(ti.expectUpsert) {
+		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
 	}
-	if !checkEndpointSlices(client.LastCreate, ti.expectCreate) {
-		t.Error("failed to post the right create items", client.LastUpsert, ti.expectUpsert)
+	for zoneName := range ti.expectUpsert {
+		if !checkEndpointSlices(client.LastUpsert[zoneName], ti.expectUpsert[zoneName]) {
+			t.Error("failed to post the right upsert items", client.LastUpsert[zoneName], ti.expectUpsert[zoneName])
+		}
 	}
-
-	if !checkEndpointSlices(client.LastDelete, ti.expectDelete) {
-		t.Error("failed to post the right delete items", client.LastDelete, ti.expectDelete)
+	if len(client.LastCreate) != len(ti.expectCreate) {
+		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
+	}
+	for zoneName := range ti.expectCreate {
+		if !checkEndpointSlices(client.LastCreate[zoneName], ti.expectCreate[zoneName]) {
+			t.Error("failed to post the right create items", client.LastCreate[zoneName], ti.expectCreate[zoneName])
+		}
+	}
+	if len(client.LastDelete) != len(ti.expectDelete) {
+		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
+	}
+	for zoneName := range ti.expectDelete {
+		if !checkEndpointSlices(client.LastDelete[zoneName], ti.expectDelete[zoneName]) {
+			t.Error("failed to post the right delete items", client.LastDelete[zoneName], ti.expectDelete[zoneName])
+		}
 	}
 }
 
@@ -205,87 +127,114 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 				{
 					"withouttxt.example.com", "", "random.com",
 				},
+				{
+					"nest.sub.example.com", "", "nested.elb",
+				},
 			},
-			expectUpsert: []*route53.ResourceRecordSet{
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("update.example.com."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("elb.com"),
-						HostedZoneId: aws.String("123"),
+			expectUpsert: map[string][]*route53.ResourceRecordSet{
+				"sub.example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("nest.sub.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("nested.elb"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("nest.sub.example.com."),
 					},
 				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("update.example.com."),
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.example.com."),
+					},
 				},
 			},
-		}, {
+		},
+		{
 			msg: "no initial, sync new ones",
 			sync: []*pkg.Endpoint{{
 				"test.example.com", "", "abc.def.ghi",
 			}, {
 				"withouttxt.example.com", "", "random.com",
 			}},
-			expectUpsert: []*route53.ResourceRecordSet{
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("test.example.com."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("abc.def.ghi"),
-						HostedZoneId: aws.String("123"),
+			expectUpsert: map[string][]*route53.ResourceRecordSet{
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("test.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("abc.def.ghi"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("test.example.com."),
 					},
 				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("test.example.com."),
-				},
 			},
-			expectDelete: []*route53.ResourceRecordSet{
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("update.example.com."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("302.elb.com"),
-						HostedZoneId: aws.String("123"),
+			expectDelete: map[string][]*route53.ResourceRecordSet{
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("302.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.example.com."),
 					},
 				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("update.example.com."),
-				},
 			},
-		}, {
+		},
+		{
 			msg: "sync delete all",
 			sync: []*pkg.Endpoint{{
 				"another.example.com", "", "abc.def.ghi",
 			}, {
 				"cname.example.com", "", "hello.elb.com",
 			}},
-			expectDelete: []*route53.ResourceRecordSet{
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("test.example.com."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("404.elb.com"),
-						HostedZoneId: aws.String("123"),
+			expectDelete: map[string][]*route53.ResourceRecordSet{
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("test.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("404.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
 					},
-				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("test.example.com."),
-				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("update.example.com."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("302.elb.com"),
-						HostedZoneId: aws.String("123"),
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("test.example.com."),
 					},
-				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("update.example.com."),
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("302.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.example.com."),
+					},
 				},
 			},
 		}, {
@@ -294,64 +243,86 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 				"new.example.com", "", "qux.elb",
 			}, {
 				"test.example.com", "", "foo.elb2",
-			},
-			},
-			expectUpsert: []*route53.ResourceRecordSet{
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("test.example.com."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("foo.elb2"),
-						HostedZoneId: aws.String("123"),
+			}, {
+				"test.foo.com", "", "foo.loadbalancer", //skip it
+			}, {
+				"update.foo.com", "", "new.loadbalancer",
+			}},
+			expectUpsert: map[string][]*route53.ResourceRecordSet{
+				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.foo.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("new.loadbalancer"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.foo.com."),
 					},
 				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("test.example.com."),
-				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("new.example.com."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("qux.elb"),
-						HostedZoneId: aws.String("123"),
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("test.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("foo.elb2"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("test.example.com."),
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("new.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("qux.elb"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("new.example.com."),
 					},
 				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("new.example.com."),
-				},
 			},
-			expectDelete: []*route53.ResourceRecordSet{
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("update.example.com."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("302.elb.com"),
-						HostedZoneId: aws.String("123"),
+			expectDelete: map[string][]*route53.ResourceRecordSet{
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("302.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.example.com."),
 					},
 				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("update.example.com."),
-				},
 			},
-			expectCreate: []*route53.ResourceRecordSet{},
 		}, {
 			msg:     "process new",
-			process: &pkg.Endpoint{DNSName: "baz.org", Hostname: "cool.elb"},
-			expectCreate: []*route53.ResourceRecordSet{
-				&route53.ResourceRecordSet{
-					Type: aws.String("A"),
-					Name: aws.String("baz.org."),
-					AliasTarget: &route53.AliasTarget{
-						DNSName:      aws.String("cool.elb"),
-						HostedZoneId: aws.String("123"),
+			process: &pkg.Endpoint{DNSName: "process.example.com.", Hostname: "cool.elb"},
+			expectCreate: map[string][]*route53.ResourceRecordSet{
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("process.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("cool.elb"),
+							HostedZoneId: aws.String("123"),
+						},
 					},
-				},
-				&route53.ResourceRecordSet{
-					Type: aws.String("TXT"),
-					Name: aws.String("baz.org."),
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("baz.org."),
+					},
 				},
 			},
 		},

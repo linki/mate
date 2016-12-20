@@ -17,7 +17,7 @@ go get github.com/zalando-incubator/mate
 or
 
 ```
-docker run registry.opensource.zalan.do/teapot/mate:v0.1.0 --help
+docker run registry.opensource.zalan.do/teapot/mate:v0.3.0 --help
 ```
 
 # Usage
@@ -29,10 +29,8 @@ Depending on the cloud provider the invocation differs slightly
 ```
 $ mate \
     --producer=kubernetes \
-    --kubernetes-domain=example.com \
-    --kubernetes-format="{{.Namespace}}-{{.Name}}" \
+    --kubernetes-format="{{.Namespace}}-{{.Name}}.example.com" \
     --consumer=aws \
-    --aws-hosted-zone=example.com. \
     --aws-record-group-id=foo
 ```
 
@@ -47,8 +45,7 @@ For each exposed service Mate will create two records in Route53:
 ```
 $ mate \
     --producer=kubernetes \
-    --kubernetes-domain=example.com \
-    --kubernetes-format="{{.Namespace}}-{{.Name}}" \
+    --kubernetes-format="{{.Namespace}}-{{.Name}}.example.com" \
     --consumer=google \
     --google-project=bar \
     --google-zone=example-com

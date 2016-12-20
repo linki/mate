@@ -27,9 +27,8 @@ func (l defaultLog) Infoln(args ...interface{}) {
 }
 
 type Options struct {
-	HostedZone string
-	Log        Logger
-	GroupID    string
+	Log     Logger
+	GroupID string
 }
 
 type Client struct {
@@ -47,23 +46,16 @@ func New(o Options) *Client {
 	return &Client{o}
 }
 
-//ListRecordSets ...
-//retrieve A records filtered by aws group id
-func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
+//ListRecordSets retrieve all records existing in the specified hosted zone
+func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error) {
 	client, err := c.initRoute53Client()
 	if err != nil {
 		return nil, err
 	}
-	zoneID, err := c.getZoneID(client)
-	if err != nil {
-		return nil, err
-	}
-	if zoneID == nil {
-		return nil, fmt.Errorf("hosted zone not found: %s", c.options.HostedZone)
-	}
+
 	// TODO: implement paging
 	params := &route53.ListResourceRecordSetsInput{
-		HostedZoneId: zoneID,
+		HostedZoneId: aws.String(zoneID),
 	}
 	rsp, err := client.ListResourceRecordSets(params)
 	if err != nil {
@@ -77,13 +69,9 @@ func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
 	return rsp.ResourceRecordSets, nil
 }
 
-func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error {
+//ChangeRecordSets creates and submits the record set change against the AWS API
+func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error {
 	client, err := c.initRoute53Client()
-	if err != nil {
-		return err
-	}
-
-	zoneID, err := c.getZoneID(client)
 	if err != nil {
 		return err
 	}
@@ -97,7 +85,7 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 			ChangeBatch: &route53.ChangeBatch{
 				Changes: changes,
 			},
-			HostedZoneId: zoneID,
+			HostedZoneId: aws.String(zoneID),
 		}
 		_, err = client.ChangeResourceRecordSets(params)
 		return err
@@ -161,4 +149,24 @@ func (c *Client) GetGroupID() string {
 //GetAssignedTXTRecordObject returns the TXT record which accompanies the Alias record
 func (c *Client) GetAssignedTXTRecordObject(r *route53.ResourceRecordSet) *route53.ResourceRecordSet {
 	return c.createTXTRecordObject(aws.StringValue(r.Name))
+}
+
+// GetHostedZones returns the map hosted zone domain name -> zone id
+func (c *Client) GetHostedZones() (map[string]string, error) {
+	client, err := c.initRoute53Client()
+	if err != nil {
+		return nil, err
+	}
+
+	output, err := client.ListHostedZones(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	hostedZoneMap := map[string]string{}
+	for _, zone := range output.HostedZones {
+		hostedZoneMap[aws.StringValue(zone.Name)] = aws.StringValue(zone.Id)
+	}
+
+	return hostedZoneMap, nil
 }

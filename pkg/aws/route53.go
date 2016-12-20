@@ -27,8 +27,7 @@ func (c *Client) initRoute53Client() (*route53.Route53, error) {
 	return route53.New(session), nil
 }
 
-//endpointToAlias ...
-//convert endpoint to an AWS A Alias record
+//endpointToAlias convert endpoint to an AWS A Alias record
 func (c *Client) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
@@ -52,8 +51,7 @@ func getRecordTarget(r *route53.ResourceRecordSet) string {
 	return aws.StringValue(r.ResourceRecords[0].Value)
 }
 
-//getTXTRecord ...
-//gets AWS TXT Record Resource object for a given DNS entry
+//createTXTRecordObject creates AWS TXT Record Resource object for a given DNS entry
 func (c *Client) createTXTRecordObject(DNSName string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("TXT"),
@@ -75,27 +73,4 @@ func createChangesList(action string, rsets []*route53.ResourceRecordSet) []*rou
 		})
 	}
 	return changes
-}
-
-func (c *Client) getZoneID(ac *route53.Route53) (*string, error) {
-	zonesResult, err := ac.ListHostedZones(nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if zonesResult == nil {
-		return nil, ErrInvalidAWSResponse
-	}
-
-	zoneName := pkg.SanitizeDNSName(c.options.HostedZone)
-
-	var zoneID *string
-	for _, z := range zonesResult.HostedZones {
-		if aws.StringValue(z.Name) == zoneName {
-			zoneID = z.Id
-			break
-		}
-	}
-
-	return zoneID, nil
 }

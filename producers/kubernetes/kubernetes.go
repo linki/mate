@@ -12,14 +12,12 @@ import (
 )
 
 const (
-	defaultFormat = "{{.Name}}-{{.Namespace}}"
 	annotationKey = "zalando.org/dnsname"
 )
 
 var params struct {
 	project string
 	zone    string
-	domain  string
 
 	kubeServer *url.URL
 	format     string
@@ -33,13 +31,12 @@ type kubernetesProducer struct {
 
 func init() {
 	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&params.kubeServer)
-	kingpin.Flag("kubernetes-format", "Format of DNS entries").Default(defaultFormat).StringVar(&params.format)
-	kingpin.Flag("kubernetes-domain", "The DNS domain to create DNS entries under.").StringVar(&params.domain)
+	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&params.format)
 }
 
 func NewProducer() (*kubernetesProducer, error) {
-	if params.domain == "" {
-		return nil, errors.New("Please provide --kubernetes-domain")
+	if params.format == "" {
+		return nil, errors.New("Please provide --kubernetes-format")
 	}
 
 	ingress, err := NewKubernetesIngress()

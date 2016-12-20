@@ -10,23 +10,36 @@ import (
 )
 
 type Options struct {
-	HostedZone   string
-	RecordSetTTL int
-	GroupID      string
+	GroupID string
 }
 
 type Client struct {
-	Current    []*route53.ResourceRecordSet
-	LastUpsert []*route53.ResourceRecordSet
-	LastDelete []*route53.ResourceRecordSet
-	LastCreate []*route53.ResourceRecordSet
+	Current    map[string][]*route53.ResourceRecordSet
+	LastUpsert map[string][]*route53.ResourceRecordSet
+	LastDelete map[string][]*route53.ResourceRecordSet
+	LastCreate map[string][]*route53.ResourceRecordSet
 	failNext   error
 	Options    Options
 	*awsclient.Client
 }
 
-func (c *Client) ListRecordSets() ([]*route53.ResourceRecordSet, error) {
-	return c.Current, nil
+func NewClient(groupID string) *Client {
+	return &Client{
+		Client: awsclient.New(awsclient.Options{
+			GroupID: groupID,
+		}),
+		Options: Options{
+			GroupID: groupID,
+		},
+		LastCreate: map[string][]*route53.ResourceRecordSet{},
+		LastDelete: map[string][]*route53.ResourceRecordSet{},
+		LastUpsert: map[string][]*route53.ResourceRecordSet{},
+	}
+}
+
+func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error) {
+	c.Current = getOriginalState(c.Client.GetGroupID())
+	return c.Current[zoneID], nil
 }
 
 func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
@@ -51,16 +64,25 @@ func (c *Client) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *rou
 	return rs
 }
 
-func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet) error {
+func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error {
 	if err := c.checkFailNext(); err != nil {
 		return err
 	}
 
-	c.LastCreate = create
-	c.LastDelete = del
-	c.LastUpsert = upsert
-
+	if len(create) > 0 {
+		c.LastCreate[zoneID] = create
+	}
+	if len(del) > 0 {
+		c.LastDelete[zoneID] = del
+	}
+	if len(upsert) > 0 {
+		c.LastUpsert[zoneID] = upsert
+	}
 	return nil
+}
+
+func (c *Client) GetHostedZones() (map[string]string, error) {
+	return getHostedZones(), nil
 }
 
 func (c *Client) FailNext() {
