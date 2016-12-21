@@ -86,43 +86,44 @@ func (a *kubernetesServiceProducer) Monitor(results chan *pkg.Endpoint, errChan 
 			}
 		}
 
-		select {
-		case event := <-w.ResultChan():
-			if event.Type == watch.Error {
-				// TODO: consider allowing the service continue running and just log this error
-				errChan <- fmt.Errorf("[Service] Event listener received an error, terminating: %v", event)
-				continue
+		for {
+			select {
+			case event := <-w.ResultChan():
+				if event.Type == watch.Error {
+					// TODO: consider allowing the service continue running and just log this error
+					errChan <- fmt.Errorf("[Service] Event listener received an error, terminating: %v", event)
+					continue
+				}
+
+				if event.Type != watch.Added && event.Type != watch.Modified {
+					continue
+				}
+
+				svc, ok := event.Object.(*api.Service)
+				if !ok {
+					// If the object wasn't a Service we can safely ignore it
+					log.Printf("[Service] Cannot cast object to service: %v", svc)
+					continue
+				}
+
+				log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
+
+				if err := validateService(*svc); err != nil {
+					log.Warnln(err)
+					continue
+				}
+
+				ep, err := a.convertServiceToEndpoint(*svc)
+				if err != nil {
+					errChan <- err
+					continue
+				}
+
+				results <- ep
+			case <-done:
+				log.Info("[Service] Exited monitoring loop.")
+				return
 			}
-
-			if event.Type != watch.Added && event.Type != watch.Modified {
-				continue
-			}
-
-			svc, ok := event.Object.(*api.Service)
-			if !ok {
-				// If the object wasn't a Service we can safely ignore it
-				log.Printf("[Service] Cannot cast object to service: %v", svc)
-				continue
-			}
-
-			log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
-
-			if err := validateService(*svc); err != nil {
-				log.Warnln(err)
-				continue
-			}
-
-			ep, err := a.convertServiceToEndpoint(*svc)
-			if err != nil {
-				// TODO: consider letting the service continue running and just log this error
-				errChan <- err
-				continue
-			}
-
-			results <- ep
-		case <-done:
-			log.Info("[Service] Exited monitoring loop.")
-			return
 		}
 	}
 }

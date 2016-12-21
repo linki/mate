@@ -85,45 +85,47 @@ func (a *kubernetesIngressProducer) Monitor(results chan *pkg.Endpoint, errChan 
 			}
 		}
 
-		select {
-		case event := <-w.ResultChan():
-			if event.Type == watch.Error {
-				// TODO: consider allowing the service continue running and just log this error
-				errChan <- fmt.Errorf("[Ingress] Event listener received an error, terminating: %v", event)
-				continue
-			}
+		for {
+			select {
+			case event := <-w.ResultChan():
+				if event.Type == watch.Error {
+					// TODO: consider allowing the service continue running and just log this error
+					errChan <- fmt.Errorf("[Ingress] Event listener received an error, terminating: %v", event)
+					continue
+				}
 
-			if event.Type != watch.Added && event.Type != watch.Modified {
-				continue
-			}
+				if event.Type != watch.Added && event.Type != watch.Modified {
+					continue
+				}
 
-			ing, ok := event.Object.(*extensions.Ingress)
-			if !ok {
-				// If the object wasn't a Service we can safely ignore it
-				log.Printf("[Ingress] Cannot cast object to ingress: %v", ing)
-				continue
-			}
+				ing, ok := event.Object.(*extensions.Ingress)
+				if !ok {
+					// If the object wasn't a Service we can safely ignore it
+					log.Printf("[Ingress] Cannot cast object to ingress: %v", ing)
+					continue
+				}
 
-			log.Printf("%s: %s/%s", event.Type, ing.Namespace, ing.Name)
+				log.Printf("%s: %s/%s", event.Type, ing.Namespace, ing.Name)
 
-			if err := validateIngress(*ing); err != nil {
-				log.Warnln(err)
-				continue
-			}
+				if err := validateIngress(*ing); err != nil {
+					log.Warnln(err)
+					continue
+				}
 
-			eps, err := a.convertIngressToEndpoint(*ing)
-			if err != nil {
-				// TODO: consider letting the service continue running and just log this error
-				errChan <- err
-				continue
-			}
+				eps, err := a.convertIngressToEndpoint(*ing)
+				if err != nil {
+					// TODO: consider letting the service continue running and just log this error
+					errChan <- err
+					continue
+				}
 
-			for _, ep := range eps {
-				results <- ep
+				for _, ep := range eps {
+					results <- ep
+				}
+			case <-done:
+				log.Info("[Ingress] Exited monitoring loop.")
+				return
 			}
-		case <-done:
-			log.Info("[Ingress] Exited monitoring loop.")
-			return
 		}
 	}
 }
