@@ -2,6 +2,7 @@ package consumers
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/zalando-incubator/mate/pkg"
 )
@@ -19,6 +20,7 @@ var params struct {
 
 type Consumer interface {
 	Sync([]*pkg.Endpoint) error
+	Consume(chan *pkg.Endpoint, chan error, chan struct{}, *sync.WaitGroup)
 	Process(*pkg.Endpoint) error
 }
 

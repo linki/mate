@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"sync"
 
+	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/zalando-incubator/mate/pkg"
@@ -26,8 +27,6 @@ var params struct {
 type kubernetesProducer struct {
 	ingress *kubernetesIngressProducer
 	service *kubernetesServiceProducer
-
-	wg sync.WaitGroup
 }
 
 func init() {
@@ -42,12 +41,12 @@ func NewProducer() (*kubernetesProducer, error) {
 
 	ingress, err := NewKubernetesIngress()
 	if err != nil {
-		return nil, fmt.Errorf("Error creating producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
 	service, err := NewKubernetesService()
 	if err != nil {
-		return nil, fmt.Errorf("Error creating producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
 	return &kubernetesProducer{
@@ -59,42 +58,24 @@ func NewProducer() (*kubernetesProducer, error) {
 func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	ingressEndpoints, err := a.ingress.Endpoints()
 	if err != nil {
-		return nil, fmt.Errorf("Error getting endpoints from producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error getting endpoints from producer: %v", err)
 	}
 
 	serviceEndpoints, err := a.service.Endpoints()
 	if err != nil {
-		return nil, fmt.Errorf("Error getting endpoints from producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error getting endpoints from producer: %v", err)
 	}
 
 	return append(ingressEndpoints, serviceEndpoints...), nil
 }
 
-func (a *kubernetesProducer) Monitor() (chan *pkg.Endpoint, chan error) {
-	channel1, errors1 := a.ingress.Monitor()
-	channel2, errors2 := a.service.Monitor()
+func (a *kubernetesProducer) Monitor(results chan *pkg.Endpoint, errChan chan error, done chan struct{}, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
 
-	channel := make(chan *pkg.Endpoint)
-	errors := make(chan error)
+	go a.ingress.Monitor(results, errChan, done, wg)
+	go a.service.Monitor(results, errChan, done, wg)
 
-	a.wg.Add(1)
-
-	go func() {
-		defer a.wg.Done()
-
-		for {
-			select {
-			case event := <-channel1:
-				channel <- event
-			case event := <-channel2:
-				channel <- event
-			case event := <-errors1:
-				errors <- event
-			case event := <-errors2:
-				errors <- event
-			}
-		}
-	}()
-
-	return channel, errors
+	<-done
+	log.Info("[Kubernetes] Exited monitoring loop.")
 }

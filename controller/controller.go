@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -23,11 +22,12 @@ const (
 type Controller struct {
 	producer producers.Producer
 	consumer consumers.Consumer
+	options  *Options
 
-	options *Options
-
-	mutex sync.Mutex
-	wg    sync.WaitGroup
+	results chan *pkg.Endpoint
+	errors  chan error
+	done    chan struct{}
+	wg      sync.WaitGroup
 }
 
 type Options struct {
@@ -47,133 +47,68 @@ func New(producer producers.Producer, consumer consumers.Consumer, options *Opti
 		producer: producer,
 		consumer: consumer,
 		options:  options,
+
+		results: make(chan *pkg.Endpoint),
+		errors:  make(chan error),
+		done:    make(chan struct{}),
 	}
 }
 
 func (c *Controller) Run() chan error {
-	errors := make(chan error)
+	go c.Synchronize()
+	go c.Watch()
 
-	errors1 := c.Synchronize()
-	errors2 := c.Watch()
-
-	c.wg.Add(1)
-
-	go func() {
-		defer c.wg.Done()
-
-		for {
-			select {
-			case err := <-errors1:
-				errors <- err
-			case err := <-errors2:
-				errors <- err
-			}
-		}
-	}()
-
-	return errors
+	return c.errors
 }
 
-func (c *Controller) RunAndWait() {
+func (c *Controller) Wait() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	errors := c.Run()
+	<-signalChan
+	log.Info("Shutdown signal received, exiting...")
+	close(c.done)
+	c.wg.Wait()
+}
+
+func (c *Controller) Synchronize() {
+	c.wg.Add(1)
+	defer c.wg.Done()
 
 	for {
+		log.Debugf("[Synchronize] Sleeping for %s...", c.options.syncPeriod)
 		select {
-		case err := <-errors:
-			log.Error(err)
-		case <-signalChan:
-			log.Info("Shutdown signal received, exiting...")
+		case <-time.After(c.options.syncPeriod):
+		case <-c.done:
+			log.Info("[Synchronize] Exited synchronization loop.")
 			return
+		}
+
+		log.Infoln("[Synchronize] Synchronizing DNS entries...")
+
+		endpoints, err := c.producer.Endpoints()
+		if err != nil {
+			c.errors <- fmt.Errorf("[Synchronize] Error getting endpoints from producer: %v", err)
+			continue
+		}
+
+		err = c.consumer.Sync(endpoints)
+		if err != nil {
+			c.errors <- fmt.Errorf("[Synchronize] Error consuming endpoints: %v", err)
+			continue
 		}
 	}
 }
 
-func (c *Controller) Synchronize() chan error {
-	errors := make(chan error)
-
-	c.wg.Add(1)
-
-	go func() {
-		defer c.wg.Done()
-
-		for {
-			log.Infoln("[Synchronize] Synchronizing DNS entries...")
-
-			endpoints, err := c.producer.Endpoints()
-			if err != nil {
-				errors <- fmt.Errorf("Error getting endpoints from producer: %v", err)
-			}
-
-			err = c.consumer.Sync(endpoints)
-			if err != nil {
-				errors <- fmt.Errorf("Error consuming endpoints: %v", err)
-			}
-
-			log.Infof("[Synchronize] Sleeping for %s...", c.options.syncPeriod)
-			select {
-			case <-time.After(c.options.syncPeriod):
-			}
-		}
-	}()
-
-	return errors
+func (c *Controller) Watch() {
+	go c.monitorProducer()
+	go c.consumeEndpoints()
 }
 
-func (c *Controller) Watch() chan error {
-	errors := make(chan error)
-
-	channel, errors1 := c.monitorProducer()
-	errors2 := c.consumeEndpoints(channel)
-
-	c.wg.Add(1)
-
-	go func() {
-		defer c.wg.Done()
-
-		for {
-			select {
-			case err := <-errors1:
-				errors <- err
-			case err := <-errors2:
-				errors <- err
-			}
-		}
-	}()
-
-	return errors
+func (c *Controller) monitorProducer() {
+	c.producer.Monitor(c.results, c.errors, c.done, &c.wg)
 }
 
-func (c *Controller) monitorProducer() (chan *pkg.Endpoint, chan error) {
-	return c.producer.Monitor()
-}
-
-func (c *Controller) consumeEndpoints(channel chan *pkg.Endpoint) chan error {
-	errChan := make(chan error)
-
-	c.wg.Add(1)
-
-	go func() {
-		defer c.wg.Done()
-
-		log.Infoln("[Watch] Listening for events...")
-
-		for {
-			endpoint, ok := <-channel
-			if !ok {
-				errChan <- errors.New("[Watch] channel closed")
-			}
-
-			log.Infof("[Watch] Processing (%s, %s, %s)\n", endpoint.DNSName, endpoint.IP, endpoint.Hostname)
-
-			err := c.consumer.Process(endpoint)
-			if err != nil {
-				errChan <- err
-			}
-		}
-	}()
-
-	return errChan
+func (c *Controller) consumeEndpoints() {
+	c.consumer.Consume(c.results, c.errors, c.done, &c.wg)
 }

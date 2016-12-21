@@ -2,6 +2,7 @@ package producers
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/zalando-incubator/mate/pkg"
 	"github.com/zalando-incubator/mate/producers/fake"
@@ -10,7 +11,7 @@ import (
 
 type Producer interface {
 	Endpoints() ([]*pkg.Endpoint, error)
-	Monitor() (chan *pkg.Endpoint, chan error)
+	Monitor(chan *pkg.Endpoint, chan error, chan struct{}, *sync.WaitGroup)
 }
 
 func New(name string) (Producer, error) {

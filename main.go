@@ -42,5 +42,13 @@ func main() {
 	}
 
 	ctrl := controller.New(p, c, nil)
-	ctrl.RunAndWait()
+	errors := ctrl.Run()
+
+	go func() {
+		for {
+			log.Error(<-errors)
+		}
+	}()
+
+	ctrl.Wait()
 }
