@@ -63,8 +63,17 @@ func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*route53.Res
 			return false
 		}
 	}
-
 	return true
+}
+
+func NonEmptyMapLength(Map map[string][]*route53.ResourceRecordSet) int {
+	ans := 0
+	for key := range Map {
+		if len(Map[key]) > 0 {
+			ans++
+		}
+	}
+	return ans
 }
 
 func testAWSConsumer(t *testing.T, ti awsTestItem) {
@@ -87,7 +96,7 @@ func testAWSConsumer(t *testing.T, ti awsTestItem) {
 			return
 		}
 	}
-	if len(client.LastUpsert) != len(ti.expectUpsert) {
+	if NonEmptyMapLength(client.LastUpsert) != NonEmptyMapLength(ti.expectUpsert) {
 		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
 	}
 	for zoneName := range ti.expectUpsert {
@@ -95,16 +104,16 @@ func testAWSConsumer(t *testing.T, ti awsTestItem) {
 			t.Error("failed to post the right upsert items", client.LastUpsert[zoneName], ti.expectUpsert[zoneName])
 		}
 	}
-	if len(client.LastCreate) != len(ti.expectCreate) {
-		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
+	if NonEmptyMapLength(client.LastCreate) != NonEmptyMapLength(ti.expectCreate) {
+		t.Error("failed to post the right create items. Number of hosted zones is different.", client.LastCreate, ti.expectCreate)
 	}
 	for zoneName := range ti.expectCreate {
 		if !checkEndpointSlices(client.LastCreate[zoneName], ti.expectCreate[zoneName]) {
 			t.Error("failed to post the right create items", client.LastCreate[zoneName], ti.expectCreate[zoneName])
 		}
 	}
-	if len(client.LastDelete) != len(ti.expectDelete) {
-		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
+	if NonEmptyMapLength(client.LastDelete) != NonEmptyMapLength(ti.expectDelete) {
+		t.Error("failed to post the right delete items. Number of hosted zones is different.", client.LastDelete, ti.expectDelete)
 	}
 	for zoneName := range ti.expectDelete {
 		if !checkEndpointSlices(client.LastDelete[zoneName], ti.expectDelete[zoneName]) {
@@ -161,6 +170,22 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 					},
 				},
 			},
+			expectDelete: map[string][]*route53.ResourceRecordSet{
+				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.foo.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("404.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.foo.com."),
+					},
+				},
+			},
 		},
 		{
 			msg: "no initial, sync new ones",
@@ -200,6 +225,20 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 						Name: aws.String("update.example.com."),
 					},
 				},
+				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.foo.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("404.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.foo.com."),
+					},
+				},
 			},
 		},
 		{
@@ -234,6 +273,20 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 					&route53.ResourceRecordSet{
 						Type: aws.String("TXT"),
 						Name: aws.String("update.example.com."),
+					},
+				},
+				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.foo.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("404.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.foo.com."),
 					},
 				},
 			},

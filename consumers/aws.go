@@ -78,19 +78,16 @@ func (a *awsClient) Sync(endpoints []*pkg.Endpoint) error {
 
 	var wg sync.WaitGroup
 	for zoneName, zoneID := range hostedZonesMap {
-		if len(inputByZoneID[zoneID]) > 0 {
-			wg.Add(1)
-			zoneID := zoneID
-			go func() {
-				defer wg.Done()
-				err := a.syncPerHostedZone(inputByZoneID[zoneID], zoneID)
-				if err != nil {
-					//should pass the err down the error channel
-					//for now just log
-					log.Errorf("Error changing records per zone: %s", zoneName)
-				}
-			}()
-		}
+		wg.Add(1)
+		go func(zoneName, zoneID string) {
+			defer wg.Done()
+			err := a.syncPerHostedZone(inputByZoneID[zoneID], zoneID)
+			if err != nil {
+				//should pass the err down the error channel
+				//for now just log
+				log.Errorf("Error changing records per zone: %s", zoneName)
+			}
+		}(zoneName, zoneID)
 	}
 	wg.Wait()
 	return nil
@@ -150,7 +147,7 @@ func (a *awsClient) syncPerHostedZone(newAliasRecords []*route53.ResourceRecordS
 		return a.client.ChangeRecordSets(upsert, del, nil, zoneID)
 	}
 
-	log.Infoln("No changes submitted")
+	log.Infoln("No changes submitted for zone: ", zoneID)
 	return nil
 }
 
