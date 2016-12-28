@@ -48,25 +48,40 @@ func New(o Options) *Client {
 
 //ListRecordSets retrieve all records existing in the specified hosted zone
 func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error) {
+	records := make([]*route53.ResourceRecordSet, 0)
+
 	client, err := c.initRoute53Client()
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: implement paging
 	params := &route53.ListResourceRecordSetsInput{
 		HostedZoneId: aws.String(zoneID),
-	}
-	rsp, err := client.ListResourceRecordSets(params)
-	if err != nil {
-		return nil, err
+		MaxItems:     aws.String("50"),
 	}
 
-	if rsp == nil {
-		return nil, ErrInvalidAWSResponse
-	}
+	for {
+		rsp, err := client.ListResourceRecordSets(params)
+		if err != nil {
+			return nil, err
+		}
 
-	return rsp.ResourceRecordSets, nil
+		if rsp == nil {
+			log.Warnln("Empty response from AWS ListRecordSets API")
+			break
+		}
+
+		records = append(records, rsp.ResourceRecordSets...)
+		log.Debugf("Page of records per %s. Size: %d. More records: %v", zoneID,
+			len(rsp.ResourceRecordSets), aws.BoolValue(rsp.IsTruncated))
+
+		//retrieve next set of records if any
+		if !aws.BoolValue(rsp.IsTruncated) {
+			break //no more records
+		}
+		params.SetStartRecordName(aws.StringValue(rsp.NextRecordName))
+	}
+	return records, nil
 }
 
 //ChangeRecordSets creates and submits the record set change against the AWS API
