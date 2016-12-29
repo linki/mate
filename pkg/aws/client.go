@@ -57,7 +57,6 @@ func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, er
 
 	params := &route53.ListResourceRecordSetsInput{
 		HostedZoneId: aws.String(zoneID),
-		MaxItems:     aws.String("50"),
 	}
 
 	for {
