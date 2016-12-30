@@ -46,11 +46,8 @@ build/linux/$(BINARY): $(SOURCES)
 build/osx/$(BINARY): $(SOURCES)
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build $(BUILD_FLAGS) -o build/osx/$(BINARY) -ldflags "$(LDFLAGS)" .
 
-$(DOCKERFILE).upstream: $(DOCKERFILE)
-	sed "s@UPSTREAM@$(shell $(shell head -1 $(DOCKERFILE) | sed -E 's@FROM (.*)/(.*)/(.*):.*@pierone latest \2 \3 --url \1@'))@" $(DOCKERFILE) > $(DOCKERFILE).upstream
-
-build.docker: $(DOCKERFILE).upstream scm-source.json build.linux
-	docker build --rm -t "$(IMAGE):$(TAG)" -f $(DOCKERFILE).upstream .
+build.docker: $(DOCKERFILE) scm-source.json build.linux
+	docker build --rm -t "$(IMAGE):$(TAG)" -f $(DOCKERFILE) .
 
 build.push: build.docker
 	docker push "$(IMAGE):$(TAG)"
