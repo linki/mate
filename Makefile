@@ -53,7 +53,7 @@ $(DOCKERFILE_ZALANDO).upstream: $(DOCKERFILE_ZALANDO)
 build.docker.zalando: $(DOCKERFILE_ZALANDO).upstream scm-source.json build.linux #zalando compliant image
 	docker build --rm -t "$(IMAGE):$(TAG)" -f $(DOCKERFILE_ZALANDO).upstream .
 	
-build.push: build.docker
+build.push: build.docker.zalando
 	docker push "$(IMAGE):$(TAG)"
 
 build.docker: build.linux #using hub alpine
