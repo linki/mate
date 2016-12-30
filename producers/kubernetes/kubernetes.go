@@ -25,8 +25,9 @@ var params struct {
 }
 
 type kubernetesProducer struct {
-	ingress *kubernetesIngressProducer
-	service *kubernetesServiceProducer
+	ingress   *kubernetesIngressProducer
+	service   *kubernetesServiceProducer
+	nodePorts *kubernetesNodePortsProducer
 }
 
 func init() {
@@ -49,9 +50,15 @@ func NewProducer() (*kubernetesProducer, error) {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
+	nodePorts, err := NewKubernetesNodePorts()
+	if err != nil {
+		return nil, fmt.Errorf("Error creating producer: %v", err)
+	}
+
 	return &kubernetesProducer{
-		ingress: ingress,
-		service: service,
+		ingress:   ingress,
+		service:   service,
+		nodePorts: nodePorts,
 	}, nil
 }
 
@@ -66,7 +73,13 @@ func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 		return nil, fmt.Errorf("[Kubernetes] Error getting endpoints from producer: %v", err)
 	}
 
-	return append(ingressEndpoints, serviceEndpoints...), nil
+	nodePortsEndpoints, err := a.nodePorts.Endpoints()
+	if err != nil {
+		return nil, fmt.Errorf("Error getting endpoints from producer: %v", err)
+	}
+
+	ingressEndpoints = append(ingressEndpoints, serviceEndpoints...)
+	return append(ingressEndpoints, nodePortsEndpoints...), nil
 }
 
 func (a *kubernetesProducer) Monitor(results chan *pkg.Endpoint, errChan chan error, done chan struct{}, wg *sync.WaitGroup) {
@@ -75,6 +88,7 @@ func (a *kubernetesProducer) Monitor(results chan *pkg.Endpoint, errChan chan er
 
 	go a.ingress.Monitor(results, errChan, done, wg)
 	go a.service.Monitor(results, errChan, done, wg)
+	go a.nodePorts.Monitor(results, errChan, done, wg)
 
 	<-done
 	log.Info("[Kubernetes] Exited monitoring loop.")
