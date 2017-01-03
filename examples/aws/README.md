@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: mate
-        image: registry.opensource.zalan.do/teapot/mate:v0.3.0
+        image: registry.opensource.zalan.do/teapot/mate:v0.3.2
         args:
         - --producer=kubernetes
         - --kubernetes-format={{.Namespace}}-{{.Name}}.example.com
