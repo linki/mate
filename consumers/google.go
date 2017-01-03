@@ -23,6 +23,11 @@ type googleDNSConsumer struct {
 	client *dns.Service
 }
 
+type ownedRecord struct {
+	owner  *dns.ResourceRecordSet
+	record *dns.ResourceRecordSet
+}
+
 func init() {
 	//	kingpin.Flag("gcloud-domain", "The DNS domain to create DNS entries under.").StringVar(params.domain)
 	kingpin.Flag("google-project", "Project ID that manages the zone").StringVar(&params.project)
@@ -79,7 +84,7 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	for _, e := range endpoints {
 		record, exists := currentRecords[e.DNSName]
 
-		if !exists || exists && isResponsible(record) {
+		if !exists || exists && isResponsible(record.owner) {
 			records = append(records, e)
 		}
 	}
@@ -102,18 +107,18 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	}
 
 	for _, r := range currentRecords {
-		if isResponsible(r) {
+		if r.record != nil && isResponsible(r.owner) {
 			change.Deletions = append(change.Deletions,
 				&dns.ResourceRecordSet{
-					Name:    r.Name,
-					Rrdatas: r.Rrdatas,
-					Ttl:     r.Ttl,
-					Type:    r.Type,
+					Name:    r.record.Name,
+					Rrdatas: r.record.Rrdatas,
+					Ttl:     r.record.Ttl,
+					Type:    r.record.Type,
 				},
 				&dns.ResourceRecordSet{
-					Name:    r.Name,
+					Name:    r.record.Name,
 					Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
-					Ttl:     r.Ttl,
+					Ttl:     r.record.Ttl,
 					Type:    "TXT",
 				},
 			)
@@ -172,31 +177,40 @@ func (d *googleDNSConsumer) applyChange(change *dns.Change) error {
 	return nil
 }
 
-func (d *googleDNSConsumer) currentRecords() (map[string]*dns.ResourceRecordSet, error) {
+func (d *googleDNSConsumer) currentRecords() (map[string]*ownedRecord, error) {
 	resp, err := d.client.ResourceRecordSets.List(params.project, params.zone).Do()
 	if err != nil {
 		return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", params.project, params.zone, err)
 	}
 
-	records := make(map[string]*dns.ResourceRecordSet)
+	records := make(map[string]*ownedRecord)
 
 	for _, r := range resp.Rrsets {
-		if r.Type == "TXT" {
-			records[r.Name] = r
-		} else {
-			if _, exists := records[r.Name]; !exists {
-				records[r.Name] = nil
+		if r.Type == "A" || r.Type == "TXT" {
+			record := records[r.Name]
+
+			if record == nil {
+				record = &ownedRecord{}
 			}
+
+			switch r.Type {
+			case "A":
+				record.record = r
+			case "TXT":
+				record.owner = r
+			}
+
+			records[r.Name] = record
 		}
 	}
 
 	return records, nil
 }
 
-func (d *googleDNSConsumer) printRecords(records map[string]*dns.ResourceRecordSet) {
+func (d *googleDNSConsumer) printRecords(records map[string]*ownedRecord) {
 	for _, r := range records {
-		if isResponsible(r) {
-			log.Debugln(" ", r.Name, r.Type, r.Rrdatas)
+		if r.record != nil && isResponsible(r.owner) {
+			log.Debugln(" ", r.record.Name, r.record.Type, r.record.Rrdatas)
 		}
 	}
 }
