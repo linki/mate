@@ -21,6 +21,7 @@ const (
 
 type googleDNSConsumer struct {
 	client *dns.Service
+	labels []string
 }
 
 type ownedRecord struct {
@@ -63,8 +64,11 @@ func NewGoogleDNS() (Consumer, error) {
 		return nil, fmt.Errorf("Error creating DNS service: %v", err)
 	}
 
+	labels := []string{heritageLabel, labelPrefix + params.recordGroupID}
+
 	return &googleDNSConsumer{
 		client: client,
+		labels: labels,
 	}, nil
 }
 
@@ -104,7 +108,7 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 			},
 			&dns.ResourceRecordSet{
 				Name:    dnsName,
-				Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+				Rrdatas: d.labels,
 				Ttl:     300,
 				Type:    "TXT",
 			},
@@ -122,7 +126,7 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 				},
 				&dns.ResourceRecordSet{
 					Name:    r.record.Name,
-					Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+					Rrdatas: d.labels,
 					Ttl:     r.record.Ttl,
 					Type:    "TXT",
 				},
@@ -150,7 +154,7 @@ func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {
 		},
 		&dns.ResourceRecordSet{
 			Name:    endpoint.DNSName,
-			Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+			Rrdatas: d.labels,
 			Ttl:     300,
 			Type:    "TXT",
 		},
