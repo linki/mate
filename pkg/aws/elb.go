@@ -17,8 +17,9 @@ type LoadBalancer struct {
 	CanonicalZoneID string
 }
 
-//LoadBalancerExtractor is a func type which is extract Classic and Application Loadbalancer
-type LoadBalancerExtractor func(*session.Session) ([]*LoadBalancer, error)
+//GetLoadBalancerFunc is a func type to represent the interface of functions that retrieve the list
+//of load balancers from AWS
+type GetLoadBalancerFunc func(*session.Session) ([]*LoadBalancer, error)
 
 //getCanonicalZoneIDs returns the map of LB (ALB + ELB classic) mapped to its CanonicalHostedZoneId
 func (c *Client) getCanonicalZoneIDs(endpoints []*pkg.Endpoint) (map[string]string, error) {
@@ -38,11 +39,11 @@ func (c *Client) getCanonicalZoneIDs(endpoints []*pkg.Endpoint) (map[string]stri
 	var addLBMutex sync.Mutex
 	var wg sync.WaitGroup
 
-	for _, extractor := range []LoadBalancerExtractor{c.getALBs, c.getELBs} {
+	for _, getLBs := range []GetLoadBalancerFunc{c.getALBs, c.getELBs} {
 		wg.Add(1)
-		go func(extractor LoadBalancerExtractor) {
+		go func(getLBs GetLoadBalancerFunc) {
 			defer wg.Done()
-			lbs, err := extractor(session)
+			lbs, err := getLBs(session)
 			if err != nil {
 				log.Errorf("Error getting LBs: %v. Skipping...", err)
 				return
@@ -50,7 +51,7 @@ func (c *Client) getCanonicalZoneIDs(endpoints []*pkg.Endpoint) (map[string]stri
 			addLBMutex.Lock()
 			loadBalancers = append(loadBalancers, lbs...)
 			addLBMutex.Unlock()
-		}(extractor)
+		}(getLBs)
 	}
 
 	wg.Wait()
@@ -73,32 +74,22 @@ func (c *Client) getELBs(session *session.Session) ([]*LoadBalancer, error) {
 
 	client := elb.New(session)
 
-	params := &elb.DescribeLoadBalancersInput{
-		Marker: nil,
-	}
+	params := &elb.DescribeLoadBalancersInput{}
 
-	for {
-		resp, err := client.DescribeLoadBalancers(params)
-		if err != nil {
-			return nil, err
-		}
-		if resp == nil {
-			return nil, ErrInvalidAWSResponse
-		}
-
+	err := client.DescribeLoadBalancersPages(params, func(resp *elb.DescribeLoadBalancersOutput, lastPage bool) bool {
 		loadBalancers := resp.LoadBalancerDescriptions
-		log.Debugf("Page of elbs. Size: %d. Next marker: %v", len(loadBalancers), aws.StringValue(resp.NextMarker))
+		log.Debugf("Getting a page of ELBs of length: %d", len(resp.LoadBalancerDescriptions))
 		for _, loadbalancer := range loadBalancers {
 			result = append(result, &LoadBalancer{
 				DNSName:         aws.StringValue(loadbalancer.DNSName),
 				CanonicalZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneNameID),
 			})
 		}
+		return !lastPage
+	})
 
-		if aws.StringValue(resp.NextMarker) == "" {
-			break
-		}
-		params.SetMarker(aws.StringValue(resp.NextMarker))
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil
@@ -109,34 +100,23 @@ func (c *Client) getALBs(session *session.Session) ([]*LoadBalancer, error) {
 
 	client := elbv2.New(session)
 
-	params := &elbv2.DescribeLoadBalancersInput{
-		Marker: nil,
-	}
+	params := &elbv2.DescribeLoadBalancersInput{}
 
-	for {
-		resp, err := client.DescribeLoadBalancers(params)
-		if err != nil {
-			return nil, err
-		}
-		if resp == nil {
-			return nil, ErrInvalidAWSResponse
-		}
-
+	err := client.DescribeLoadBalancersPages(params, func(resp *elbv2.DescribeLoadBalancersOutput, lastPage bool) bool {
 		loadBalancers := resp.LoadBalancers
-		log.Debugf("Page of albs. Size: %d. Next marker: %v", len(loadBalancers), aws.StringValue(resp.NextMarker))
+		log.Debugf("Getting a page of ALBs of length: %d", len(resp.LoadBalancers))
 		for _, loadbalancer := range loadBalancers {
 			result = append(result, &LoadBalancer{
 				DNSName:         aws.StringValue(loadbalancer.DNSName),
 				CanonicalZoneID: aws.StringValue(loadbalancer.CanonicalHostedZoneId),
 			})
 		}
+		return !lastPage
+	})
 
-		if aws.StringValue(resp.NextMarker) == "" {
-			break
-		}
-		params.SetMarker(aws.StringValue(resp.NextMarker))
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil
-
 }

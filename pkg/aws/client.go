@@ -59,27 +59,16 @@ func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, er
 		HostedZoneId: aws.String(zoneID),
 	}
 
-	for {
-		rsp, err := client.ListResourceRecordSets(params)
-		if err != nil {
-			return nil, err
-		}
+	err = client.ListResourceRecordSetsPages(params, func(resp *route53.ListResourceRecordSetsOutput, lastPage bool) bool {
+		log.Debugf("Getting a list of AWS RRS of length: %d", len(resp.ResourceRecordSets))
+		records = append(records, resp.ResourceRecordSets...)
+		return !lastPage
+	})
 
-		if rsp == nil {
-			log.Warnln("Empty response from AWS ListRecordSets API")
-			break
-		}
-
-		records = append(records, rsp.ResourceRecordSets...)
-		log.Debugf("Page of records per %s. Size: %d. More records: %v", zoneID,
-			len(rsp.ResourceRecordSets), aws.BoolValue(rsp.IsTruncated))
-
-		//retrieve next set of records if any
-		if !aws.BoolValue(rsp.IsTruncated) {
-			break //no more records
-		}
-		params.SetStartRecordName(aws.StringValue(rsp.NextRecordName))
+	if err != nil {
+		return nil, err
 	}
+
 	return records, nil
 }
 
