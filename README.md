@@ -1,4 +1,5 @@
 # Mate
+[![Build Status](https://travis-ci.org/zalando-incubator/mate.svg?branch=master)](https://travis-ci.org/zalando-incubator/mate)
 
 Mate synchronizes AWS Route53 or Google CloudDNS records with exposed Kubernetes services and ingresses.
 
