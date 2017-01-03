@@ -48,25 +48,28 @@ func New(o Options) *Client {
 
 //ListRecordSets retrieve all records existing in the specified hosted zone
 func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error) {
+	records := make([]*route53.ResourceRecordSet, 0)
+
 	client, err := c.initRoute53Client()
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: implement paging
 	params := &route53.ListResourceRecordSetsInput{
 		HostedZoneId: aws.String(zoneID),
 	}
-	rsp, err := client.ListResourceRecordSets(params)
+
+	err = client.ListResourceRecordSetsPages(params, func(resp *route53.ListResourceRecordSetsOutput, lastPage bool) bool {
+		log.Debugf("Getting a list of AWS RRS of length: %d", len(resp.ResourceRecordSets))
+		records = append(records, resp.ResourceRecordSets...)
+		return !lastPage
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	if rsp == nil {
-		return nil, ErrInvalidAWSResponse
-	}
-
-	return rsp.ResourceRecordSets, nil
+	return records, nil
 }
 
 //ChangeRecordSets creates and submits the record set change against the AWS API
