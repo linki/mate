@@ -73,9 +73,9 @@ On GCP this maps to using service accounts and scopes, on AWS to IAM roles and p
 #### AWS
 
 By default, `mate` runs under the same IAM role as the cluster node that the instance
-of `mate` currently runs on. If you want to resctrict the permissions `mate` gets you can use [`kube2iam`](https://github.com/jtblin/kube2iam) to set a different IAM role as context for each of your Pods in general.
+of `mate` currently runs on. If you want to restrict the permissions `mate` gets, you can use [`kube2iam`](https://github.com/jtblin/kube2iam) to set a different IAM role as context for each of your Pods in general.
 
-Follow the instructions in the `kube2iam` docs on how to deploy it in your cluster.
+Follow the instructions in the [`kube2iam`](https://github.com/jtblin/kube2iam#kube2iam) docs on how to deploy it in your cluster.
 Then create a new IAM role specifically for `mate` with enough permissions to manage your DNS records. We use the following:
 
 ```json
