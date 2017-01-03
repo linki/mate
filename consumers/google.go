@@ -83,22 +83,17 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 
 	change := new(dns.Change)
 
-	records := make(map[string][]*pkg.Endpoint)
+	records := make(map[string][]string)
 
 	for _, e := range endpoints {
 		record, exists := currentRecords[e.DNSName]
 
 		if !exists || exists && isResponsible(record.owner) {
-			records[e.DNSName] = append(records[e.DNSName], e)
+			records[e.DNSName] = append(records[e.DNSName], e.IP)
 		}
 	}
 
-	for dnsName, nested := range records {
-		ips := make([]string, 0, len(nested))
-		for _, svc := range nested {
-			ips = append(ips, svc.IP)
-		}
-
+	for dnsName, ips := range records {
 		change.Additions = append(change.Additions,
 			&dns.ResourceRecordSet{
 				Name:    dnsName,
