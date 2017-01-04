@@ -55,11 +55,7 @@ func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
 			continue
 		}
 
-		eps, err := a.convertIngressToEndpoint(ing)
-		if err != nil {
-			log.Error(err)
-			continue
-		}
+		eps := a.convertIngressToEndpoint(ing)
 
 		endpoints = append(endpoints, eps...)
 	}
@@ -116,12 +112,7 @@ loop:
 					continue
 				}
 
-				eps, err := a.convertIngressToEndpoint(*ing)
-				if err != nil {
-					// TODO: consider letting the service continue running and just log this error
-					errChan <- err
-					continue
-				}
+				eps := a.convertIngressToEndpoint(*ing)
 
 				for _, ep := range eps {
 					results <- ep
@@ -152,7 +143,7 @@ func validateIngress(ing extensions.Ingress) error {
 	return nil
 }
 
-func (a *kubernetesIngressProducer) convertIngressToEndpoint(ing extensions.Ingress) ([]*pkg.Endpoint, error) {
+func (a *kubernetesIngressProducer) convertIngressToEndpoint(ing extensions.Ingress) []*pkg.Endpoint {
 	endpoints := make([]*pkg.Endpoint, 0, len(ing.Spec.Rules))
 
 	for _, rule := range ing.Spec.Rules {
@@ -172,5 +163,5 @@ func (a *kubernetesIngressProducer) convertIngressToEndpoint(ing extensions.Ingr
 		endpoints = append(endpoints, ep)
 	}
 
-	return endpoints, nil
+	return endpoints
 }

@@ -119,7 +119,7 @@ loop:
 
 				ep, err := a.convertServiceToEndpoint(*svc)
 				if err != nil {
-					errChan <- err
+					log.Warnln(err)
 					continue
 				}
 
