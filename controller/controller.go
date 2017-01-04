@@ -24,10 +24,17 @@ type Controller struct {
 	consumer consumers.Consumer
 	options  *Options
 
+	// results is used to pass endpoints from producer to consumer
 	results chan *pkg.Endpoint
-	errors  chan error
-	done    chan struct{}
-	wg      sync.WaitGroup
+
+	// errors can be used by producers and consumers to report errors up
+	errors chan error
+
+	// done is used to send termination signals to nested goroutines
+	done chan struct{}
+
+	// wg keeps track of running goroutines
+	wg sync.WaitGroup
 }
 
 type Options struct {
