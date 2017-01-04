@@ -3,6 +3,8 @@ package test
 import (
 	"errors"
 
+	"sync"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/zalando-incubator/mate/pkg"
@@ -14,12 +16,13 @@ type Options struct {
 }
 
 type Client struct {
-	Current    map[string][]*route53.ResourceRecordSet
-	LastUpsert map[string][]*route53.ResourceRecordSet
-	LastDelete map[string][]*route53.ResourceRecordSet
-	LastCreate map[string][]*route53.ResourceRecordSet
-	failNext   error
-	Options    Options
+	Current        map[string][]*route53.ResourceRecordSet
+	LastUpsert     map[string][]*route53.ResourceRecordSet
+	LastDelete     map[string][]*route53.ResourceRecordSet
+	LastCreate     map[string][]*route53.ResourceRecordSet
+	failNext       error
+	Options        Options
+	UpdateMapMutex sync.Mutex
 	*awsclient.Client
 }
 
@@ -68,7 +71,8 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 	if err := c.checkFailNext(); err != nil {
 		return err
 	}
-
+	c.UpdateMapMutex.Lock()
+	defer c.UpdateMapMutex.Unlock()
 	if len(create) > 0 {
 		c.LastCreate[zoneID] = create
 	}
