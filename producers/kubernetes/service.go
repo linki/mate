@@ -141,10 +141,9 @@ func validateService(svc api.Service) error {
 		)
 	case len(svc.Status.LoadBalancer.Ingress) > 1:
 		// TODO(linki): in case we have multiple ingress we can just create multiple A or CNAME records
-		return fmt.Errorf(
-			"[Service] Cannot register service '%s/%s'. More than one ingress is not supported",
-			svc.Namespace, svc.Name,
-		)
+		log.Warnf("[Service] Service '%s/%s' has more than one ingress (%d). Only using the first one.",
+			svc.Namespace, svc.Name, len(svc.Status.LoadBalancer.Ingress))
+		return nil
 	}
 
 	return nil

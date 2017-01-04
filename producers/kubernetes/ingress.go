@@ -134,10 +134,9 @@ func validateIngress(ing extensions.Ingress) error {
 		)
 	case len(ing.Status.LoadBalancer.Ingress) > 1:
 		// TODO(linki): in case we have multiple ingress we can just create multiple A or CNAME records
-		return fmt.Errorf(
-			"[Ingress] Cannot register ingress '%s/%s'. More than one ingress is not supported",
-			ing.Namespace, ing.Name,
-		)
+		log.Warnf("[Ingress] Ingress '%s/%s' has more than one ingress (%d). Only using the first one.",
+			ing.Namespace, ing.Name, len(ing.Status.LoadBalancer.Ingress))
+		return nil
 	}
 
 	return nil
