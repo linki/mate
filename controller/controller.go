@@ -32,6 +32,7 @@ type Controller struct {
 
 type Options struct {
 	syncPeriod time.Duration
+	SyncOnly   bool
 }
 
 func New(producer producers.Producer, consumer consumers.Consumer, options *Options) *Controller {
@@ -56,7 +57,10 @@ func New(producer producers.Producer, consumer consumers.Consumer, options *Opti
 
 func (c *Controller) Run() chan error {
 	go c.Synchronize()
-	go c.Watch()
+
+	if !c.options.SyncOnly {
+		go c.Watch()
+	}
 
 	return c.errors
 }

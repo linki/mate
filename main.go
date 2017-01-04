@@ -13,6 +13,7 @@ var params struct {
 	producer string
 	consumer string
 	debug    bool
+	syncOnly bool
 }
 
 var version = "Unknown"
@@ -21,6 +22,7 @@ func init() {
 	kingpin.Flag("producer", "The endpoints producer to use.").Required().StringVar(&params.producer)
 	kingpin.Flag("consumer", "The endpoints consumer to use.").Required().StringVar(&params.consumer)
 	kingpin.Flag("debug", "Enable debug logging.").BoolVar(&params.debug)
+	kingpin.Flag("sync-only", "Disable event watcher").BoolVar(&params.syncOnly)
 }
 
 func main() {
@@ -41,7 +43,10 @@ func main() {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
 
-	ctrl := controller.New(p, c, nil)
+	opts := &controller.Options{
+		SyncOnly: params.syncOnly,
+	}
+	ctrl := controller.New(p, c, opts)
 	errors := ctrl.Run()
 
 	go func() {
