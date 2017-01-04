@@ -154,7 +154,7 @@ func (a *awsClient) syncPerHostedZone(newAliasRecords []*route53.ResourceRecordS
 	return nil
 }
 
-func (a *awsClient) Consume(endpoints chan *pkg.Endpoint, errors chan error, done chan struct{}, wg *sync.WaitGroup) {
+func (a *awsClient) Consume(endpoints <-chan *pkg.Endpoint, errors chan<- error, done <-chan struct{}, wg *sync.WaitGroup) {
 	wg.Add(1)
 	defer wg.Done()
 

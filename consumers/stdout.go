@@ -29,7 +29,7 @@ func (d *stdoutConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	return nil
 }
 
-func (d *stdoutConsumer) Consume(endpoints chan *pkg.Endpoint, errors chan error, done chan struct{}, wg *sync.WaitGroup) {
+func (d *stdoutConsumer) Consume(endpoints <-chan *pkg.Endpoint, errors chan<- error, done <-chan struct{}, wg *sync.WaitGroup) {
 	wg.Add(1)
 	defer wg.Done()
 

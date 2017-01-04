@@ -20,7 +20,7 @@ var params struct {
 
 type Consumer interface {
 	Sync([]*pkg.Endpoint) error
-	Consume(chan *pkg.Endpoint, chan error, chan struct{}, *sync.WaitGroup)
+	Consume(<-chan *pkg.Endpoint, chan<- error, <-chan struct{}, *sync.WaitGroup)
 	Process(*pkg.Endpoint) error
 }
 
