@@ -71,6 +71,7 @@ func (a *kubernetesIngressProducer) Monitor(results chan *pkg.Endpoint, errChan 
 	wg.Add(1)
 	defer wg.Done()
 
+loop:
 	for {
 		w, err := a.client.Ingresses(api.NamespaceAll).Watch(api.ListOptions{})
 		if err != nil {
@@ -79,15 +80,18 @@ func (a *kubernetesIngressProducer) Monitor(results chan *pkg.Endpoint, errChan 
 			case <-done:
 				log.Info("[Ingress] Exited monitoring loop.")
 				return
-			default:
-				time.Sleep(5 * time.Second)
-				continue
+			case <-time.After(5 * time.Second):
+				goto loop
 			}
 		}
 
 		for {
 			select {
-			case event := <-w.ResultChan():
+			case event, ok := <-w.ResultChan():
+				if !ok {
+					goto loop
+				}
+
 				if event.Type == watch.Error {
 					// TODO: consider allowing the service continue running and just log this error
 					errChan <- fmt.Errorf("[Ingress] Event listener received an error, terminating: %v", event)
