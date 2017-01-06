@@ -12,7 +12,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/zalando-incubator/mate/interfaces"
 	"github.com/zalando-incubator/mate/pkg"
 	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 )
@@ -39,7 +38,7 @@ func init() {
 
 // NewAWSRoute53 reates a Consumer instance to sync and process DNS
 // entries in AWS Route53.
-func NewAWSRoute53() (interfaces.Consumer, error) {
+func NewAWSRoute53() (Consumer, error) {
 	if params.awsGroupID == "" {
 		return nil, errors.New("please provide --aws-record-group-id")
 	}

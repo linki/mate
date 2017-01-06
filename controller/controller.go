@@ -10,8 +10,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/zalando-incubator/mate/interfaces"
+	"github.com/zalando-incubator/mate/consumers"
 	"github.com/zalando-incubator/mate/pkg"
+	"github.com/zalando-incubator/mate/producers"
 )
 
 const (
@@ -19,8 +20,8 @@ const (
 )
 
 type Controller struct {
-	producer interfaces.Producer
-	consumer interfaces.Consumer
+	producer producers.Producer
+	consumer consumers.Consumer
 	options  *Options
 
 	// results is used to pass endpoints from producer to consumer
@@ -41,7 +42,7 @@ type Options struct {
 	SyncOnly   bool
 }
 
-func New(producer interfaces.Producer, consumer interfaces.Consumer, options *Options) *Controller {
+func New(producer producers.Producer, consumer consumers.Consumer, options *Options) *Controller {
 	if options == nil {
 		options = &Options{}
 	}

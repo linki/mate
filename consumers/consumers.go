@@ -2,8 +2,9 @@ package consumers
 
 import (
 	"fmt"
+	"sync"
 
-	"github.com/zalando-incubator/mate/interfaces"
+	"github.com/zalando-incubator/mate/pkg"
 )
 
 var params struct {
@@ -17,9 +18,15 @@ var params struct {
 	awsGroupID    string
 }
 
+type Consumer interface {
+	Sync([]*pkg.Endpoint) error
+	Consume(<-chan *pkg.Endpoint, chan<- error, <-chan struct{}, *sync.WaitGroup)
+	Process(*pkg.Endpoint) error
+}
+
 // Returns a Consumer implementation.
-func New(name string) (interfaces.Consumer, error) {
-	var create func() (interfaces.Consumer, error)
+func New(name string) (Consumer, error) {
+	var create func() (Consumer, error)
 	switch name {
 	case "google":
 		create = NewGoogleDNS
