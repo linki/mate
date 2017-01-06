@@ -26,7 +26,6 @@ var params struct {
 }
 
 type fakeProducer struct {
-	channel      chan *pkg.Endpoint
 	mode         string
 	dnsName      string
 	targetDomain string
@@ -42,7 +41,6 @@ func init() {
 
 func NewFake() (*fakeProducer, error) {
 	return &fakeProducer{
-		channel:      make(chan *pkg.Endpoint),
 		mode:         params.mode,
 		dnsName:      params.dnsName,
 		targetDomain: params.targetDomain,

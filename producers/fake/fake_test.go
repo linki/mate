@@ -44,7 +44,6 @@ func TestFakeEndpointsResolveToIPAddresses(t *testing.T) {
 
 func TestFakeEndpointsResolveToHostnamesInHostnameMode(t *testing.T) {
 	producer := &fakeProducer{
-		channel: make(chan *pkg.Endpoint),
 		mode:    hostnameMode,
 		dnsName: "example.org.",
 	}
@@ -88,7 +87,6 @@ func TestNewFakeReadsConfigurationFromParams(t *testing.T) {
 
 func newProducer() *fakeProducer {
 	producer := &fakeProducer{
-		channel: make(chan *pkg.Endpoint),
 		mode:    ipMode,
 		dnsName: "example.org.",
 	}
