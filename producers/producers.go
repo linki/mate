@@ -7,6 +7,7 @@ import (
 	"github.com/zalando-incubator/mate/pkg"
 	"github.com/zalando-incubator/mate/producers/fake"
 	"github.com/zalando-incubator/mate/producers/kubernetes"
+	"github.com/zalando-incubator/mate/producers/null"
 )
 
 type Producer interface {
@@ -20,6 +21,8 @@ func New(name string) (Producer, error) {
 		return kubernetes.NewProducer()
 	case "fake":
 		return fake.NewFake()
+	case "null":
+		return null.NewNull()
 	}
 	return nil, fmt.Errorf("Unknown producer '%s'.", name)
 }
