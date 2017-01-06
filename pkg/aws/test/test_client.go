@@ -1,44 +1,31 @@
 package test
 
 import (
-	"fmt"
-
 	"sync"
 
 	"github.com/aws/aws-sdk-go/service/route53"
 )
 
-type Options struct {
-	GroupID string
-}
-
 type Client struct {
+	HostedZones    map[string]string
 	Current        map[string][]*route53.ResourceRecordSet
 	LastUpsert     map[string][]*route53.ResourceRecordSet
 	LastDelete     map[string][]*route53.ResourceRecordSet
 	LastCreate     map[string][]*route53.ResourceRecordSet
-	failNext       error
-	Options        Options
 	UpdateMapMutex sync.Mutex
 }
 
-func NewClient(groupID string) *Client {
+func NewClient(groupID string, initState map[string][]*route53.ResourceRecordSet, hostedZones map[string]string) *Client {
 	return &Client{
-		Options: Options{
-			GroupID: groupID,
-		},
-		LastCreate: map[string][]*route53.ResourceRecordSet{},
-		LastDelete: map[string][]*route53.ResourceRecordSet{},
-		LastUpsert: map[string][]*route53.ResourceRecordSet{},
+		HostedZones: hostedZones,
+		Current:     initState,
+		LastCreate:  map[string][]*route53.ResourceRecordSet{},
+		LastDelete:  map[string][]*route53.ResourceRecordSet{},
+		LastUpsert:  map[string][]*route53.ResourceRecordSet{},
 	}
 }
 
-func (c *Client) GetGroupID() string {
-	return fmt.Sprintf("\"mate:%s\"", c.Options.GroupID)
-}
-
 func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error) {
-	c.Current = getOriginalState(c.GetGroupID())
 	return c.Current[zoneID], nil
 }
 
@@ -67,5 +54,5 @@ func (c *Client) GetCanonicalZoneIDs(lbDNS []string) (map[string]string, error) 
 }
 
 func (c *Client) GetHostedZones() (map[string]string, error) {
-	return getHostedZones(), nil
+	return c.HostedZones, nil
 }

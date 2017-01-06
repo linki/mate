@@ -1,6 +1,7 @@
 package consumers
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -113,20 +114,6 @@ func TestGetRecordTarget(t *testing.T) {
 	}
 }
 
-func checkTestError(t *testing.T, err error, expect bool) bool {
-	if err == nil && expect {
-		t.Error("failed to fail")
-		return false
-	}
-
-	if err != nil && !expect {
-		t.Error("unexpected error", err)
-		return false
-	}
-
-	return true
-}
-
 func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*route53.ResourceRecordSet) bool {
 	if len(got) != len(expect) {
 		return false
@@ -171,20 +158,14 @@ func NonEmptyMapLength(Map map[string][]*route53.ResourceRecordSet) int {
 
 func testAWSConsumer(t *testing.T, ti awsTestItem) {
 	groupID := "testing-group-id"
-	client := awstest.NewClient(groupID)
+	client := awstest.NewClient(groupID, awstest.GetOriginalState(fmt.Sprintf("\"mate:%s\"", groupID)), awstest.GetHostedZones())
 
 	consumer := withClient(client, groupID)
 
 	if ti.process == nil {
-		err := consumer.Sync(ti.sync)
-		if !checkTestError(t, err, ti.expectFail) {
-			return
-		}
+		consumer.Sync(ti.sync)
 	} else {
-		err := consumer.Process(ti.process)
-		if !checkTestError(t, err, ti.expectFail) {
-			return
-		}
+		consumer.Process(ti.process)
 	}
 	if NonEmptyMapLength(client.LastUpsert) != NonEmptyMapLength(ti.expectUpsert) {
 		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)
