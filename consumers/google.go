@@ -22,6 +22,7 @@ const (
 
 type googleDNSConsumer struct {
 	client *dns.Service
+	labels []string
 }
 
 type ownedRecord struct {
@@ -64,8 +65,11 @@ func NewGoogleDNS() (Consumer, error) {
 		return nil, fmt.Errorf("Error creating DNS service: %v", err)
 	}
 
+	labels := []string{heritageLabel, labelPrefix + params.recordGroupID}
+
 	return &googleDNSConsumer{
 		client: client,
+		labels: labels,
 	}, nil
 }
 
@@ -80,27 +84,27 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 
 	change := new(dns.Change)
 
-	records := make([]*pkg.Endpoint, 0)
+	records := make(map[string][]string)
 
 	for _, e := range endpoints {
 		record, exists := currentRecords[e.DNSName]
 
 		if !exists || exists && isResponsible(record.owner) {
-			records = append(records, e)
+			records[e.DNSName] = append(records[e.DNSName], e.IP)
 		}
 	}
 
-	for _, svc := range records {
+	for dnsName, ips := range records {
 		change.Additions = append(change.Additions,
 			&dns.ResourceRecordSet{
-				Name:    svc.DNSName,
-				Rrdatas: []string{svc.IP},
+				Name:    dnsName,
+				Rrdatas: ips,
 				Ttl:     300,
 				Type:    "A",
 			},
 			&dns.ResourceRecordSet{
-				Name:    svc.DNSName,
-				Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+				Name:    dnsName,
+				Rrdatas: d.labels,
 				Ttl:     300,
 				Type:    "TXT",
 			},
@@ -118,7 +122,7 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 				},
 				&dns.ResourceRecordSet{
 					Name:    r.record.Name,
-					Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+					Rrdatas: d.labels,
 					Ttl:     r.record.Ttl,
 					Type:    "TXT",
 				},
@@ -173,7 +177,7 @@ func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {
 		},
 		&dns.ResourceRecordSet{
 			Name:    endpoint.DNSName,
-			Rrdatas: []string{heritageLabel, labelPrefix + params.recordGroupID},
+			Rrdatas: d.labels,
 			Ttl:     300,
 			Type:    "TXT",
 		},
@@ -215,9 +219,9 @@ func (d *googleDNSConsumer) currentRecords() (map[string]*ownedRecord, error) {
 
 	for _, r := range resp.Rrsets {
 		if r.Type == "A" || r.Type == "TXT" {
-			record := records[r.Name]
+			record, exists := records[r.Name]
 
-			if record == nil {
+			if !exists {
 				record = &ownedRecord{}
 			}
 
