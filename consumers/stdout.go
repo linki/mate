@@ -6,6 +6,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	"github.com/zalando-incubator/mate/interfaces"
 	"github.com/zalando-incubator/mate/pkg"
 )
 
@@ -13,7 +14,7 @@ import (
 // or new file writrer better
 type stdoutConsumer struct{}
 
-func NewStdout() (Consumer, error) {
+func NewStdout() (interfaces.Consumer, error) {
 	return &stdoutConsumer{}, nil
 }
 

@@ -3,19 +3,20 @@ package consumers
 import (
 	"sync"
 
+	"github.com/zalando-incubator/mate/interfaces"
 	"github.com/zalando-incubator/mate/pkg"
 )
 
 type SyncedConsumer struct {
 	sync.Mutex
-	Consumer
+	interfaces.Consumer
 }
 
 // NewSynced provides a consumer that can execute only
 // one operation at a time, and blocks
 // concurrent operations until the current one
 // finishes.
-func NewSynced(name string) (Consumer, error) {
+func NewSynced(name string) (interfaces.Consumer, error) {
 	consumer, err := New(name)
 	if err != nil {
 		return nil, err

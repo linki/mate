@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/zalando-incubator/mate/interfaces"
 	"github.com/zalando-incubator/mate/pkg"
 
 	log "github.com/Sirupsen/logrus"
@@ -37,7 +38,7 @@ func init() {
 	kingpin.Flag("google-record-group-id", "Name of the zone to manage.").StringVar(&params.recordGroupID)
 }
 
-func NewGoogleDNS() (Consumer, error) {
+func NewGoogleDNS() (interfaces.Consumer, error) {
 	if params.zone == "" {
 		return nil, errors.New("Please provide --google-zone")
 	}

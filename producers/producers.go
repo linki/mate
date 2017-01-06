@@ -2,19 +2,13 @@ package producers
 
 import (
 	"fmt"
-	"sync"
 
-	"github.com/zalando-incubator/mate/pkg"
+	"github.com/zalando-incubator/mate/interfaces"
 	"github.com/zalando-incubator/mate/producers/fake"
 	"github.com/zalando-incubator/mate/producers/kubernetes"
 )
 
-type Producer interface {
-	Endpoints() ([]*pkg.Endpoint, error)
-	Monitor(chan *pkg.Endpoint, chan error, chan struct{}, *sync.WaitGroup)
-}
-
-func New(name string) (Producer, error) {
+func New(name string) (interfaces.Producer, error) {
 	switch name {
 	case "kubernetes":
 		return kubernetes.NewProducer()
