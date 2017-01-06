@@ -9,7 +9,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 
+	"github.com/zalando-incubator/mate/interfaces"
 	"github.com/zalando-incubator/mate/pkg"
+	"github.com/zalando-incubator/mate/producers/null"
 )
 
 const (
@@ -20,19 +22,21 @@ var params struct {
 	project string
 	zone    string
 
-	kubeServer *url.URL
-	format     string
+	kubeServer      *url.URL
+	format          string
+	enableNodePorts bool
 }
 
 type kubernetesProducer struct {
-	ingress   *kubernetesIngressProducer
-	service   *kubernetesServiceProducer
-	nodePorts *kubernetesNodePortsProducer
+	ingress   interfaces.Producer
+	service   interfaces.Producer
+	nodePorts interfaces.Producer
 }
 
 func init() {
 	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&params.kubeServer)
 	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&params.format)
+	kingpin.Flag("enable-node-port-services", "When true, generates DNS entries for type=NodePort services").BoolVar(&params.enableNodePorts)
 }
 
 func NewProducer() (*kubernetesProducer, error) {
@@ -40,26 +44,30 @@ func NewProducer() (*kubernetesProducer, error) {
 		return nil, errors.New("Please provide --kubernetes-format")
 	}
 
-	ingress, err := NewKubernetesIngress()
+	var err error
+
+	producer := &kubernetesProducer{}
+
+	producer.ingress, err = NewKubernetesIngress()
 	if err != nil {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
-	service, err := NewKubernetesService()
+	producer.service, err = NewKubernetesService()
 	if err != nil {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
-	nodePorts, err := NewKubernetesNodePorts()
+	if params.enableNodePorts {
+		producer.nodePorts, err = NewKubernetesNodePorts()
+	} else {
+		producer.nodePorts, err = null.NewNull()
+	}
 	if err != nil {
-		return nil, fmt.Errorf("Error creating producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
-	return &kubernetesProducer{
-		ingress:   ingress,
-		service:   service,
-		nodePorts: nodePorts,
-	}, nil
+	return producer, nil
 }
 
 func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
@@ -75,7 +83,7 @@ func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 
 	nodePortsEndpoints, err := a.nodePorts.Endpoints()
 	if err != nil {
-		return nil, fmt.Errorf("Error getting endpoints from producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error getting endpoints from producer: %v", err)
 	}
 
 	ingressEndpoints = append(ingressEndpoints, serviceEndpoints...)
