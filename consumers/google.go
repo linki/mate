@@ -191,9 +191,9 @@ func (d *googleDNSConsumer) currentRecords() (map[string]*ownedRecord, error) {
 
 	for _, r := range resp.Rrsets {
 		if r.Type == "A" || r.Type == "TXT" {
-			record := records[r.Name]
+			record, exists := records[r.Name]
 
-			if record == nil {
+			if !exists {
 				record = &ownedRecord{}
 			}
 
