@@ -18,7 +18,7 @@ go get github.com/zalando-incubator/mate
 or
 
 ```
-docker run registry.opensource.zalan.do/teapot/mate:v0.3.2 --help
+docker run registry.opensource.zalan.do/teapot/mate:v0.4.0 --help
 ```
 
 # Features
