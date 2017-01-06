@@ -52,7 +52,7 @@ func TestGetAssignedTXTRecordObject(t *testing.T) {
 		Hostname: "amazon.elb.com",
 	}
 	rsA := client.endpointToAlias(ep, &zoneID)
-	rsTXT := client.GetAssignedTXTRecordObject(rsA)
+	rsTXT := client.getAssignedTXTRecordObject(rsA)
 	if *rsTXT.Type != "TXT" ||
 		*rsTXT.Name != "example.com." ||
 		len(rsTXT.ResourceRecords) != 1 ||
@@ -61,12 +61,168 @@ func TestGetAssignedTXTRecordObject(t *testing.T) {
 	}
 }
 
+func TestGetZoneIDForEndpoint(t *testing.T) {
+	hostedZonesMap := map[string]string{
+		"example.com":  "example.com",
+		"test.com":     "test.com",
+		"sub.test.com": "sub.test.com",
+	}
+	record1 := &route53.ResourceRecordSet{
+		Name: aws.String("name.example.com"),
+	}
+	record2 := &route53.ResourceRecordSet{
+		Name: aws.String("name.example.test.com"),
+	}
+	record3 := &route53.ResourceRecordSet{
+		Name: aws.String("name.sub.test.com"),
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record1) != "example.com" {
+		t.Errorf("Incorrect zone id for %v", record1)
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record2) != "test.com" {
+		t.Errorf("Incorrect zone id for %v", record2)
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record3) != "sub.test.com" {
+		t.Errorf("Incorrect zone id for %v", record3)
+	}
+}
+
+func sameTargets(lb1, lb2 string) bool {
+	return lb1 == lb2
+}
+
+func TestRecordInfo(t *testing.T) {
+	groupID := "test"
+	client := &awsConsumer{
+		groupID: groupID,
+	}
+	records := []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("test.example.com."),
+			AliasTarget: &route53.AliasTarget{
+				DNSName:      aws.String("abc.def.ghi"),
+				HostedZoneId: aws.String("123"),
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+	}
+	recordInfoMap := client.recordInfo(records)
+	if len(recordInfoMap) != 1 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := recordInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("abc.def.ghi", val.Target) {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+	records = []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+	}
+	recordInfoMap = client.recordInfo(records)
+	if len(recordInfoMap) != 1 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := recordInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("", val.Target) {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+
+	records = []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("new.example.com."),
+			AliasTarget: &route53.AliasTarget{
+				DNSName:      aws.String("elb.com"),
+				HostedZoneId: aws.String("123"),
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("new.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String("mate:new-group-id"),
+				},
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("test.example.com."),
+			AliasTarget: &route53.AliasTarget{
+				DNSName:      aws.String("abc.def.ghi"),
+				HostedZoneId: aws.String("123"),
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+	}
+	recordInfoMap = client.recordInfo(records)
+	if len(recordInfoMap) != 2 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := recordInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("abc.def.ghi", val.Target) {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+	if val, exist := recordInfoMap["new.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != "mate:new-group-id" {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("elb.com", val.Target) {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+}
+
 func TestGetGroupID(t *testing.T) {
 	groupID := "test"
 	client := &awsConsumer{
 		groupID: groupID,
 	}
-	if client.GetGroupID() != "\"mate:test\"" {
+	if client.getGroupID() != "\"mate:test\"" {
 		t.Errorf("Should return TXT value of \"mate:test\", when test is passed")
 	}
 }

@@ -55,7 +55,7 @@ func withClient(c AWSClient, groupID string) *awsConsumer {
 }
 
 func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
-	newAliasRecords, err := a.EndpointsToAlias(endpoints)
+	newAliasRecords, err := a.endpointsToAlias(endpoints)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 		return err
 	}
 
-	recordInfoMap := a.RecordInfo(existingRecords)
+	recordInfoMap := a.recordInfo(existingRecords)
 
 	var upsert, del []*route53.ResourceRecordSet
 
@@ -111,19 +111,19 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 		existingRecordInfo, exist := recordInfoMap[aws.StringValue(newAliasRecord.Name)]
 
 		if !exist { //record does not exist, create it
-			newTXTRecord := a.GetAssignedTXTRecordObject(newAliasRecord)
+			newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
 			upsert = append(upsert, newAliasRecord, newTXTRecord)
 			continue
 		}
 
-		if existingRecordInfo.GroupID != a.GetGroupID() { // there exist a record with a different or empty group ID
+		if existingRecordInfo.GroupID != a.getGroupID() { // there exist a record with a different or empty group ID
 			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(newAliasRecord.Name), existingRecordInfo.GroupID)
 			continue
 		}
 
 		// make sure record only updated when target changes, not to spam AWS route53 API with dummy updates
 		if pkg.SanitizeDNSName(existingRecordInfo.Target) != aws.StringValue(newAliasRecord.AliasTarget.DNSName) {
-			newTXTRecord := a.GetAssignedTXTRecordObject(newAliasRecord)
+			newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
 			upsert = append(upsert, newAliasRecord, newTXTRecord)
 		}
 	}
@@ -131,7 +131,7 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 	//find records to be removed
 	for _, existingRecord := range existingRecords {
 		recordInfo := recordInfoMap[aws.StringValue(existingRecord.Name)]
-		if recordInfo.GroupID == a.GetGroupID() {
+		if recordInfo.GroupID == a.getGroupID() {
 			remove := true
 			for _, newAliasRecord := range newAliasRecords {
 				if aws.StringValue(newAliasRecord.Name) == aws.StringValue(existingRecord.Name) {
@@ -187,12 +187,12 @@ func (a *awsConsumer) Process(endpoint *pkg.Endpoint) error {
 		return err
 	}
 
-	aliasRecords, err := a.EndpointsToAlias([]*pkg.Endpoint{endpoint})
+	aliasRecords, err := a.endpointsToAlias([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
 	}
 
-	create := []*route53.ResourceRecordSet{aliasRecords[0], a.GetAssignedTXTRecordObject(aliasRecords[0])}
+	create := []*route53.ResourceRecordSet{aliasRecords[0], a.getAssignedTXTRecordObject(aliasRecords[0])}
 
 	zoneID := getZoneIDForEndpoint(hostedZonesMap, aliasRecords[0])
 	if zoneID == "" {
@@ -222,25 +222,25 @@ func getZoneIDForEndpoint(hostedZonesMap map[string]string, record *route53.Reso
 	return match
 }
 
-//GetGroupID returns the idenitifier for AWS records as stored in TXT records
-func (a *awsConsumer) GetGroupID() string {
+//getGroupID returns the idenitifier for AWS records as stored in TXT records
+func (a *awsConsumer) getGroupID() string {
 	return fmt.Sprintf("\"mate:%s\"", a.groupID)
 }
 
-//GetAssignedTXTRecordObject returns the TXT record which accompanies the Alias record
-func (a *awsConsumer) GetAssignedTXTRecordObject(aliasRecord *route53.ResourceRecordSet) *route53.ResourceRecordSet {
+//getAssignedTXTRecordObject returns the TXT record which accompanies the Alias record
+func (a *awsConsumer) getAssignedTXTRecordObject(aliasRecord *route53.ResourceRecordSet) *route53.ResourceRecordSet {
 	return &route53.ResourceRecordSet{
 		Type: aws.String("TXT"),
 		Name: aliasRecord.Name,
 		TTL:  aws.Int64(defaultTxtTTL),
 		ResourceRecords: []*route53.ResourceRecord{{
-			Value: aws.String(a.GetGroupID()),
+			Value: aws.String(a.getGroupID()),
 		}},
 	}
 }
 
-//RecordInfo returns the map of record assigned dns to its target and groupID (can be empty)
-func (a *awsConsumer) RecordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo {
+//recordInfo returns the map of record assigned dns to its target and groupID (can be empty)
+func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo {
 	groupIDMap := map[string]string{} //maps dns to group ID
 
 	for _, record := range records {
@@ -269,6 +269,7 @@ func (a *awsConsumer) RecordInfo(records []*route53.ResourceRecordSet) map[strin
 	return infoMap
 }
 
+//getRecordTarget returns the ELB dns for the given record
 func (a *awsConsumer) getRecordTarget(r *route53.ResourceRecordSet) string {
 	if aws.StringValue(r.Type) == "TXT" {
 		return ""
@@ -279,8 +280,8 @@ func (a *awsConsumer) getRecordTarget(r *route53.ResourceRecordSet) string {
 	return aws.StringValue(r.ResourceRecords[0].Value)
 }
 
-//EndpointsToAlias converts pkg Endpoint to route53 Alias Records
-func (a *awsConsumer) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
+//endpointsToAlias converts pkg Endpoint to route53 Alias Records
+func (a *awsConsumer) endpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
 	lbDNS := make([]string, len(endpoints))
 	for i := range endpoints {
 		lbDNS[i] = endpoints[i].Hostname
