@@ -2,13 +2,13 @@ package aws
 
 import (
 	"errors"
-	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/zalando-incubator/mate/pkg"
 )
 
 const (
@@ -96,64 +96,6 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 	return nil
 }
 
-//EndpointsToAlias converts pkg Endpoint to route53 Alias Records
-func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
-	zoneIDs, err := c.getCanonicalZoneIDs(endpoints)
-	if err != nil {
-		return nil, err
-	}
-	var rset []*route53.ResourceRecordSet
-
-	for _, ep := range endpoints {
-		if loadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
-			rset = append(rset, c.endpointToAlias(ep, aws.String(loadBalancerZoneID)))
-		} else {
-			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
-		}
-	}
-	return rset, nil
-}
-
-//RecordInfo returns the map of record assigned dns to its target and groupID (can be empty)
-func (c *Client) RecordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo {
-	groupIDMap := map[string]string{} //maps dns to group ID
-
-	for _, record := range records {
-		if (aws.StringValue(record.Type)) == "TXT" {
-			groupIDMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
-		} else {
-			if _, exist := groupIDMap[aws.StringValue(record.Name)]; !exist {
-				groupIDMap[aws.StringValue(record.Name)] = ""
-			}
-		}
-	}
-
-	infoMap := map[string]*pkg.RecordInfo{} //maps record DNS to its GroupID (if exists) and Target (LB)
-	for _, record := range records {
-		groupID := groupIDMap[aws.StringValue(record.Name)]
-		if _, exist := infoMap[aws.StringValue(record.Name)]; !exist {
-			infoMap[aws.StringValue(record.Name)] = &pkg.RecordInfo{
-				GroupID: groupID,
-			}
-		}
-		if aws.StringValue(record.Type) != "TXT" {
-			infoMap[aws.StringValue(record.Name)].Target = getRecordTarget(record)
-		}
-	}
-
-	return infoMap
-}
-
-//GetGroupID returns the idenitifier for AWS records as stored in TXT records
-func (c *Client) GetGroupID() string {
-	return fmt.Sprintf("\"mate:%s\"", c.options.GroupID)
-}
-
-//GetAssignedTXTRecordObject returns the TXT record which accompanies the Alias record
-func (c *Client) GetAssignedTXTRecordObject(r *route53.ResourceRecordSet) *route53.ResourceRecordSet {
-	return c.createTXTRecordObject(aws.StringValue(r.Name))
-}
-
 // GetHostedZones returns the map hosted zone domain name -> zone id
 func (c *Client) GetHostedZones() (map[string]string, error) {
 	client, err := c.initRoute53Client()
@@ -172,4 +114,53 @@ func (c *Client) GetHostedZones() (map[string]string, error) {
 	}
 
 	return hostedZoneMap, nil
+}
+
+//GetCanonicalZoneIDs returns the map of LB (ALB + ELB classic) mapped to its CanonicalHostedZoneId
+func (c *Client) GetCanonicalZoneIDs(lbDNS []string) (map[string]string, error) {
+	var GetLoadBalancerFunc = []func(*session.Session) ([]*LoadBalancer, error){c.getALBs, c.getELBs}
+
+	lbSession, err := session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+		Config: aws.Config{
+			Logger: aws.LoggerFunc(c.options.Log.Infoln),
+			CredentialsChainVerboseErrors: aws.Bool(true),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	loadBalancers := make([]*LoadBalancer, 0)
+
+	var addLBMutex sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, getLBs := range GetLoadBalancerFunc {
+		wg.Add(1)
+		go func(getLBs func(*session.Session) ([]*LoadBalancer, error)) {
+			defer wg.Done()
+			lbs, err := getLBs(lbSession)
+			if err != nil {
+				log.Errorf("Error getting LBs: %v. Skipping...", err)
+				return
+			}
+			addLBMutex.Lock()
+			loadBalancers = append(loadBalancers, lbs...)
+			addLBMutex.Unlock()
+		}(getLBs)
+	}
+
+	wg.Wait()
+
+	loadBalancersMap := map[string]string{} //map LB Dns to its canonical hosted zone id
+
+	for _, dns := range lbDNS {
+		for _, loadBalancer := range loadBalancers {
+			if dns == loadBalancer.DNSName {
+				loadBalancersMap[dns] = loadBalancer.CanonicalZoneID
+			}
+		}
+	}
+	return loadBalancersMap, nil
 }
