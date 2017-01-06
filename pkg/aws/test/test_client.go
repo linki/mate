@@ -1,14 +1,11 @@
 package test
 
 import (
-	"errors"
+	"fmt"
 
 	"sync"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/zalando-incubator/mate/pkg"
-	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 )
 
 type Options struct {
@@ -23,14 +20,10 @@ type Client struct {
 	failNext       error
 	Options        Options
 	UpdateMapMutex sync.Mutex
-	*awsclient.Client
 }
 
 func NewClient(groupID string) *Client {
 	return &Client{
-		Client: awsclient.New(awsclient.Options{
-			GroupID: groupID,
-		}),
 		Options: Options{
 			GroupID: groupID,
 		},
@@ -40,37 +33,16 @@ func NewClient(groupID string) *Client {
 	}
 }
 
+func (c *Client) GetGroupID() string {
+	return fmt.Sprintf("\"mate:%s\"", c.Options.GroupID)
+}
+
 func (c *Client) ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error) {
-	c.Current = getOriginalState(c.Client.GetGroupID())
+	c.Current = getOriginalState(c.GetGroupID())
 	return c.Current[zoneID], nil
 }
 
-func (c *Client) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
-	var rset []*route53.ResourceRecordSet
-	canonicalZoneID := "test"
-	for _, ep := range endpoints {
-		rset = append(rset, c.endpointToAlias(ep, &canonicalZoneID))
-	}
-	return rset, nil
-}
-
-func (c *Client) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
-	rs := &route53.ResourceRecordSet{
-		Type: aws.String("A"),
-		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
-		AliasTarget: &route53.AliasTarget{
-			DNSName:              aws.String(pkg.SanitizeDNSName(ep.Hostname)),
-			EvaluateTargetHealth: aws.Bool(false),
-			HostedZoneId:         canonicalZoneID,
-		},
-	}
-	return rs
-}
-
 func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error {
-	if err := c.checkFailNext(); err != nil {
-		return err
-	}
 	c.UpdateMapMutex.Lock()
 	defer c.UpdateMapMutex.Unlock()
 	if len(create) > 0 {
@@ -85,15 +57,15 @@ func (c *Client) ChangeRecordSets(upsert, del, create []*route53.ResourceRecordS
 	return nil
 }
 
+func (c *Client) GetCanonicalZoneIDs(lbDNS []string) (map[string]string, error) {
+	loadBalancersMap := map[string]string{} //map LB Dns to its canonical hosted zone id
+
+	for _, dns := range lbDNS {
+		loadBalancersMap[dns] = "random-zone-id"
+	}
+	return loadBalancersMap, nil
+}
+
 func (c *Client) GetHostedZones() (map[string]string, error) {
 	return getHostedZones(), nil
-}
-
-func (c *Client) FailNext() {
-	c.failNext = errors.New("test error")
-}
-
-func (c *Client) checkFailNext() (err error) {
-	err, c.failNext = c.failNext, nil
-	return
 }

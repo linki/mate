@@ -262,14 +262,14 @@ func (a *awsConsumer) RecordInfo(records []*route53.ResourceRecordSet) map[strin
 			}
 		}
 		if aws.StringValue(record.Type) != "TXT" {
-			infoMap[aws.StringValue(record.Name)].Target = getRecordTarget(record)
+			infoMap[aws.StringValue(record.Name)].Target = a.getRecordTarget(record)
 		}
 	}
 
 	return infoMap
 }
 
-func getRecordTarget(r *route53.ResourceRecordSet) string {
+func (a *awsConsumer) getRecordTarget(r *route53.ResourceRecordSet) string {
 	if aws.StringValue(r.Type) == "TXT" {
 		return ""
 	}
@@ -280,12 +280,12 @@ func getRecordTarget(r *route53.ResourceRecordSet) string {
 }
 
 //EndpointsToAlias converts pkg Endpoint to route53 Alias Records
-func (c *awsConsumer) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
+func (a *awsConsumer) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
 	lbDNS := make([]string, len(endpoints))
 	for i := range endpoints {
 		lbDNS[i] = endpoints[i].Hostname
 	}
-	zoneIDs, err := c.client.GetCanonicalZoneIDs(lbDNS)
+	zoneIDs, err := a.client.GetCanonicalZoneIDs(lbDNS)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (c *awsConsumer) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.Re
 
 	for _, ep := range endpoints {
 		if loadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
-			rset = append(rset, c.endpointToAlias(ep, aws.String(loadBalancerZoneID)))
+			rset = append(rset, a.endpointToAlias(ep, aws.String(loadBalancerZoneID)))
 		} else {
 			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
 		}
@@ -302,7 +302,7 @@ func (c *awsConsumer) EndpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.Re
 }
 
 //endpointToAlias convert endpoint to an AWS A Alias record
-func (c *awsConsumer) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
+func (a *awsConsumer) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
