@@ -43,19 +43,17 @@ func main() {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
 
-	ctrl := controller.New(p, c, nil)
-
-	err = ctrl.Synchronize()
-	if err != nil {
-		log.Fatalln(err)
+	opts := &controller.Options{
+		SyncOnly: params.syncOnly,
 	}
+	ctrl := controller.New(p, c, opts)
+	errors := ctrl.Run()
 
-	if !params.syncOnly {
-		err = ctrl.Watch()
-		if err != nil {
-			log.Fatalln(err)
+	go func() {
+		for {
+			log.Error(<-errors)
 		}
-	}
+	}()
 
 	ctrl.Wait()
 }

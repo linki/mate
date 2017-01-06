@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/zalando-incubator/mate/pkg"
 
@@ -131,6 +132,33 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	}
 
 	return nil
+}
+
+func (d *googleDNSConsumer) Consume(endpoints <-chan *pkg.Endpoint, errors chan<- error, done <-chan struct{}, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+
+	log.Infoln("[Google] Listening for events...")
+
+	for {
+		select {
+		case e, ok := <-endpoints:
+			if !ok {
+				log.Info("[Google] channel closed")
+				return
+			}
+
+			log.Infof("[Google] Processing (%s, %s, %s)\n", e.DNSName, e.IP, e.Hostname)
+
+			err := d.Process(e)
+			if err != nil {
+				errors <- err
+			}
+		case <-done:
+			log.Info("[Google] Exited consuming loop.")
+			return
+		}
+	}
 }
 
 func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {

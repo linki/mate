@@ -2,11 +2,12 @@ package fake
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/zalando-incubator/mate/pkg"
@@ -52,26 +53,41 @@ func (a *fakeProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	endpoints := make([]*pkg.Endpoint, 0)
 
 	for i := 0; i < 10; i++ {
-		endpoints = append(endpoints, a.generateEndpoint())
+		endpoint, err := a.generateEndpoint()
+		if err != nil {
+			log.Warn("[Fake] Error generating fake endpoint: %v", err)
+			continue
+		}
+
+		endpoints = append(endpoints, endpoint)
 	}
 
 	return endpoints, nil
 }
 
-func (a *fakeProducer) StartWatch() error {
+func (a *fakeProducer) Monitor(results chan *pkg.Endpoint, errChan chan error, done chan struct{}, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+
 	for {
-		a.channel <- a.generateEndpoint()
-		time.Sleep(5 * time.Second)
+		select {
+		case <-time.After(5 * time.Second):
+		case <-done:
+			log.Info("[Fake] Exited monitoring loop.")
+			return
+		}
+
+		endpoint, err := a.generateEndpoint()
+		if err != nil {
+			errChan <- err
+			continue
+		}
+
+		results <- endpoint
 	}
-
-	return nil
 }
 
-func (a *fakeProducer) ResultChan() (chan *pkg.Endpoint, error) {
-	return a.channel, nil
-}
-
-func (a *fakeProducer) generateEndpoint() *pkg.Endpoint {
+func (a *fakeProducer) generateEndpoint() (*pkg.Endpoint, error) {
 	endpoint := &pkg.Endpoint{
 		DNSName: fmt.Sprintf("%s.%s", randomString(2), a.dnsName),
 	}
@@ -87,10 +103,10 @@ func (a *fakeProducer) generateEndpoint() *pkg.Endpoint {
 	case hostnameMode:
 		endpoint.Hostname = fmt.Sprintf("%s.%s", randomString(6), a.targetDomain)
 	default:
-		log.Fatalf("Unknown mode: %s", a.mode)
+		return nil, fmt.Errorf("Unknown mode: %s", a.mode)
 	}
 
-	return endpoint
+	return endpoint, nil
 }
 
 func randomNumber(min, max int) int {

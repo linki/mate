@@ -151,6 +151,33 @@ func (a *awsClient) syncPerHostedZone(newAliasRecords []*route53.ResourceRecordS
 	return nil
 }
 
+func (a *awsClient) Consume(endpoints <-chan *pkg.Endpoint, errors chan<- error, done <-chan struct{}, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+
+	log.Infoln("[AWS] Listening for events...")
+
+	for {
+		select {
+		case e, ok := <-endpoints:
+			if !ok {
+				log.Info("[AWS] channel closed")
+				return
+			}
+
+			log.Infof("[AWS] Processing (%s, %s, %s)\n", e.DNSName, e.IP, e.Hostname)
+
+			err := a.Process(e)
+			if err != nil {
+				errors <- err
+			}
+		case <-done:
+			log.Info("[AWS] Exited consuming loop.")
+			return
+		}
+	}
+}
+
 func (a *awsClient) Process(endpoint *pkg.Endpoint) error {
 	hostedZonesMap, err := a.client.GetHostedZones()
 	if err != nil {

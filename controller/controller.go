@@ -1,8 +1,11 @@
 package controller
 
 import (
-	"errors"
+	"fmt"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -19,15 +22,24 @@ const (
 type Controller struct {
 	producer producers.Producer
 	consumer consumers.Consumer
+	options  *Options
 
-	options *Options
+	// results is used to pass endpoints from producer to consumer
+	results chan *pkg.Endpoint
 
-	mutex sync.Mutex
-	wg    sync.WaitGroup
+	// errors can be used by producers and consumers to report errors up
+	errors chan error
+
+	// done is used to send termination signals to nested goroutines
+	done chan struct{}
+
+	// wg keeps track of running goroutines
+	wg sync.WaitGroup
 }
 
 type Options struct {
 	syncPeriod time.Duration
+	SyncOnly   bool
 }
 
 func New(producer producers.Producer, consumer consumers.Consumer, options *Options) *Controller {
@@ -43,98 +55,71 @@ func New(producer producers.Producer, consumer consumers.Consumer, options *Opti
 		producer: producer,
 		consumer: consumer,
 		options:  options,
+
+		results: make(chan *pkg.Endpoint),
+		errors:  make(chan error),
+		done:    make(chan struct{}),
 	}
 }
 
-func (c *Controller) Synchronize() error {
-	c.wg.Add(1)
+func (c *Controller) Run() chan error {
+	go c.Synchronize()
 
-	go func() {
-		for {
-			log.Infoln("Synchronizing DNS entries...")
-
-			endpoints, err := c.producer.Endpoints()
-			if err != nil {
-				log.Fatalf("Error getting endpoints from producer: %v", err)
-			}
-
-			err = c.consumer.Sync(endpoints)
-			if err != nil {
-				log.Fatalf("Error consuming endpoints: %v", err)
-			}
-
-			time.Sleep(c.options.syncPeriod)
-		}
-	}()
-
-	return nil
-}
-
-func (c *Controller) Watch() error {
-	channel, err := c.monitorProducer()
-	if err != nil {
-		return err
+	if !c.options.SyncOnly {
+		go c.Watch()
 	}
 
-	err = c.processUpdates(channel)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return c.errors
 }
 
 func (c *Controller) Wait() {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	<-signalChan
+	log.Info("Shutdown signal received, exiting...")
+	close(c.done)
 	c.wg.Wait()
 }
 
-func (c *Controller) monitorProducer() (chan *pkg.Endpoint, error) {
+func (c *Controller) Synchronize() {
 	c.wg.Add(1)
+	defer c.wg.Done()
 
-	go func() {
-		defer c.wg.Done()
-
-		for {
-			err := c.producer.StartWatch()
-			switch {
-			case err == pkg.ErrEventChannelClosed:
-				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
-			case err != nil:
-				log.Fatalln(err)
-			}
+	for {
+		log.Debugf("[Synchronize] Sleeping for %s...", c.options.syncPeriod)
+		select {
+		case <-time.After(c.options.syncPeriod):
+		case <-c.done:
+			log.Info("[Synchronize] Exited synchronization loop.")
+			return
 		}
-	}()
 
-	channel, err := c.producer.ResultChan()
-	if err != nil {
-		return nil, err
+		log.Infoln("[Synchronize] Synchronizing DNS entries...")
+
+		endpoints, err := c.producer.Endpoints()
+		if err != nil {
+			c.errors <- fmt.Errorf("[Synchronize] Error getting endpoints from producer: %v", err)
+			continue
+		}
+
+		err = c.consumer.Sync(endpoints)
+		if err != nil {
+			c.errors <- fmt.Errorf("[Synchronize] Error consuming endpoints: %v", err)
+			continue
+		}
 	}
-
-	return channel, nil
 }
 
-func (c *Controller) processUpdates(channel chan *pkg.Endpoint) error {
-	c.wg.Add(1)
+func (c *Controller) Watch() {
+	go c.monitorProducer()
+	go c.consumeEndpoints()
+}
 
-	go func() {
-		defer c.wg.Done()
+func (c *Controller) monitorProducer() {
+	c.producer.Monitor(c.results, c.errors, c.done, &c.wg)
+}
 
-		log.Infoln("Listening for events...")
-
-		for {
-			endpoint, ok := <-channel
-			if !ok {
-				log.Fatalln(errors.New("channel closed"))
-			}
-
-			log.Infof("Processing (%s, %s, %s)\n", endpoint.DNSName, endpoint.IP, endpoint.Hostname)
-
-			err := c.consumer.Process(endpoint)
-			if err != nil {
-				log.Fatalln(err)
-			}
-		}
-	}()
-
-	return nil
+func (c *Controller) consumeEndpoints() {
+	c.consumer.Consume(c.results, c.errors, c.done, &c.wg)
 }

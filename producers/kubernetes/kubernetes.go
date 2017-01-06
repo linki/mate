@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -26,7 +27,6 @@ var params struct {
 type kubernetesProducer struct {
 	ingress *kubernetesIngressProducer
 	service *kubernetesServiceProducer
-	channel chan *pkg.Endpoint
 }
 
 func init() {
@@ -41,82 +41,41 @@ func NewProducer() (*kubernetesProducer, error) {
 
 	ingress, err := NewKubernetesIngress()
 	if err != nil {
-		return nil, fmt.Errorf("Error creating producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
 	service, err := NewKubernetesService()
 	if err != nil {
-		return nil, fmt.Errorf("Error creating producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
 	return &kubernetesProducer{
 		ingress: ingress,
 		service: service,
-		channel: make(chan *pkg.Endpoint),
 	}, nil
 }
 
 func (a *kubernetesProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	ingressEndpoints, err := a.ingress.Endpoints()
 	if err != nil {
-		return nil, fmt.Errorf("Error getting endpoints from producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error getting endpoints from producer: %v", err)
 	}
 
 	serviceEndpoints, err := a.service.Endpoints()
 	if err != nil {
-		return nil, fmt.Errorf("Error getting endpoints from producer: %v", err)
+		return nil, fmt.Errorf("[Kubernetes] Error getting endpoints from producer: %v", err)
 	}
 
 	return append(ingressEndpoints, serviceEndpoints...), nil
 }
 
-func (a *kubernetesProducer) StartWatch() error {
-	go func() {
-		for {
-			err := a.ingress.StartWatch()
-			switch {
-			case err == pkg.ErrEventChannelClosed:
-				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
-			case err != nil:
-				log.Fatalln(err)
-			}
-		}
-	}()
+func (a *kubernetesProducer) Monitor(results chan *pkg.Endpoint, errChan chan error, done chan struct{}, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
 
-	ingressChannel, err := a.ingress.ResultChan()
-	if err != nil {
-		return err
-	}
+	go a.ingress.Monitor(results, errChan, done, wg)
+	go a.service.Monitor(results, errChan, done, wg)
 
-	go func() {
-		for {
-			err := a.service.StartWatch()
-			switch {
-			case err == pkg.ErrEventChannelClosed:
-				log.Debugln("Unable to read from channel. Channel was closed. Trying to restart watch...")
-			case err != nil:
-				log.Fatalln(err)
-			}
-		}
-	}()
-
-	serviceChannel, err := a.service.ResultChan()
-	if err != nil {
-		return err
-	}
-
-	for {
-		select {
-		case event := <-ingressChannel:
-			a.channel <- event
-		case event := <-serviceChannel:
-			a.channel <- event
-		}
-	}
-
-	return pkg.ErrEventChannelClosed
-}
-
-func (a *kubernetesProducer) ResultChan() (chan *pkg.Endpoint, error) {
-	return a.channel, nil
+	<-done
+	log.Info("[Kubernetes] Exited monitoring loop.")
 }
