@@ -1,4 +1,4 @@
-package null
+package producers
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestNullReturnsZeroEndpoints(t *testing.T) {
-	endpoints := newEndpoints(t, nil)
+	endpoints := newNullEndpoints(t, nil)
 
 	count := len(endpoints)
 	if count != 0 {
@@ -15,7 +15,7 @@ func TestNullReturnsZeroEndpoints(t *testing.T) {
 	}
 }
 
-func newEndpoints(t *testing.T, producer *nullProducer) []*pkg.Endpoint {
+func newNullEndpoints(t *testing.T, producer *nullProducer) []*pkg.Endpoint {
 	if producer == nil {
 		producer = &nullProducer{}
 	}

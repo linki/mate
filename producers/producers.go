@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/zalando-incubator/mate/pkg"
-	"github.com/zalando-incubator/mate/producers/null"
 )
 
 type Producer interface {
@@ -20,7 +19,7 @@ func New(name string) (Producer, error) {
 	case "fake":
 		return NewFake()
 	case "null":
-		return null.NewNull()
+		return NewNull()
 	}
 	return nil, fmt.Errorf("Unknown producer '%s'.", name)
 }
