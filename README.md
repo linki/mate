@@ -25,15 +25,15 @@ docker run registry.opensource.zalan.do/teapot/mate:v0.3.0 --help
 
 1. Supports both Google and Amazon Cloud Providers
 2. Complete and safe management of DNS records for both services and ingress resources. Only records created by Mate
-will be updated and deleted. 
+will be updated and deleted.
 3. Immediate updates via Kubernetes event listener and periodic resync of all endpoints to match the Kubernetes state.
-4. Allows to specify record DNS via Service Annotations, Ingress Rules or passed in go-template 
+4. Allows to specify record DNS via Service Annotations, Ingress Rules or passed in go-template
 5. Pluggable consumers and producers (see below)
 6. Supports multiple hosted zones in AWS Route53
 
 # Usage
 
-Depending on the cloud provider the invocation differs slightly. For more detailed step-by-step guide see [examples](mate/tree/master/examples). 
+Depending on the cloud provider the invocation differs slightly. For more detailed step-by-step guide see [examples](mate/tree/master/examples).
 
 ### AWS
 
@@ -69,138 +69,7 @@ Analogous to the AWS case with the difference that it doesn't use the AWS specif
 
 `Mate` needs permission to modify DNS records in your chosen cloud provider.
 On GCP this maps to using service accounts and scopes, on AWS to IAM roles and policies.
-
-#### AWS
-
-By default, `mate` runs under the same IAM role as the cluster node that the instance
-of `mate` currently runs on. If you want to restrict the permissions `mate` gets, you can use [`kube2iam`](https://github.com/jtblin/kube2iam) to set a different IAM role as context for each of your Pods in general.
-
-Follow the instructions in the [`kube2iam`](https://github.com/jtblin/kube2iam#kube2iam) docs on how to deploy it in your cluster.
-Then create a new IAM role specifically for `mate` with enough permissions to manage your DNS records. We use the following:
-
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": "route53:*",
-            "Resource": "*",
-            "Effect": "Allow"
-        },
-        {
-            "Action": "elasticloadbalancing:DescribeLoadBalancers",
-            "Resource": "*",
-            "Effect": "Allow"
-        }
-    ]
-}
-```
-
-You also need your new role to be assumed by whatever IAM role your worker nodes run under,
-see [Trust Relationship](https://github.com/jtblin/kube2iam#iam-roles) in the `kube2iam` docs for that. Your Trust Relationship for the `mate` IAM role should look similar to this:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    },
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::<AWS_ACCOUNT_ID>:role/kube-worker-node"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-```
-
-With that being setup you can annotate your Pods with the name of the role you want to have it run under, e.g., assuming you named your IAM role `mate`, like this:
-
-```yaml
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  name: mate
-spec:
-  template:
-    metadata:
-      ...
-      annotations:
-        iam.amazonaws.com/role: mate
-    spec:
-      containers:
-      - name: mate
-      ...
-```
-
-#### Google
-
-By default, `mate` runs with the same scopes as the cluster node that the instance
-of `mate` currently runs on.
-`Mate` needs the `https://www.googleapis.com/auth/ndev.clouddns.readwrite` scope in order
-to manage your DNS records. When creating a new GKE cluster or node pool you can pass this
-value as an argument to `--scopes`.
-
-```
-$ gcloud container node-pools create "my-pool" \
-    --cluster "my-cluster" \
-    --scopes "https://www.googleapis.com/auth/ndev.clouddns.readwrite"
-```
-
-Make sure the nodes that get created have the correct scopes set and that `mate` runs on them.
-
-```
-gcloud compute instances describe gke-your-node --format json | jq '.serviceAccounts[].scopes'
-```
-
-You can also force `mate` to use a specific service account by providing it a service account
-credentials file via a mounted secret. First create a service account and give it a role
-permissive enough to manage your DNS records. (TODO: find out which one is suited best.)
-Then create a key and download the corresponding json credentials file, e.g. with:
-
-```
-$ gcloud iam service-accounts keys create gcloud-credentials.json --iam-account service-account-name@project-id.iam.gserviceaccount.com
-```
-
-Create a Kubernetes secret based on that file, e.g. with:
-
-```
-$ kubectl create secret generic gcloud-config --from-file=gcloud-credentials.json
-```
-
-You can then mount that secret into the `mate` container and pass it the `GOOGLE_APPLICATION_CREDENTIALS` environment variable pointing to the location of the file so that the Go client will find it with:
-
-```yaml
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  name: mate
-spec:
-  template:
-    ...
-    spec:
-      containers:
-      - name: mate
-        ...
-        env:
-        - name: GOOGLE_APPLICATION_CREDENTIALS
-          value: /etc/mate/gcloud-credentials.json
-        volumeMounts:
-        - mountPath: /etc/mate
-          name: gcloud-config
-          readOnly: true
-      volumes:
-      - name: gcloud-config
-        secret:
-          secretName: gcloud-config
-```
+For detailed instructions see [the examples](mate/tree/master/examples).
 
 ### Kubernetes
 
