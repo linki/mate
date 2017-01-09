@@ -31,7 +31,7 @@ func New(name string) (Consumer, error) {
 	case "google":
 		create = NewGoogleDNS
 	case "aws":
-		create = NewAWSRoute53
+		create = NewAWSConsumer
 	case "stdout":
 		create = NewStdout
 	default:

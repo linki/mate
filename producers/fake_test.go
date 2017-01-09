@@ -1,4 +1,4 @@
-package fake
+package producers
 
 import (
 	"net"
@@ -44,7 +44,6 @@ func TestFakeEndpointsResolveToIPAddresses(t *testing.T) {
 
 func TestFakeEndpointsResolveToHostnamesInHostnameMode(t *testing.T) {
 	producer := &fakeProducer{
-		channel: make(chan *pkg.Endpoint),
 		mode:    hostnameMode,
 		dnsName: "example.org.",
 	}
@@ -64,9 +63,9 @@ func TestFakeEndpointsResolveToHostnamesInHostnameMode(t *testing.T) {
 }
 
 func TestNewFakeReadsConfigurationFromParams(t *testing.T) {
-	params.dnsName = "dnsName"
-	params.mode = "mode"
-	params.targetDomain = "targetDomain"
+	fakeParams.dnsName = "dnsName"
+	fakeParams.mode = "mode"
+	fakeParams.targetDomain = "targetDomain"
 
 	producer, err := NewFake()
 	if err != nil {
@@ -88,7 +87,6 @@ func TestNewFakeReadsConfigurationFromParams(t *testing.T) {
 
 func newProducer() *fakeProducer {
 	producer := &fakeProducer{
-		channel: make(chan *pkg.Endpoint),
 		mode:    ipMode,
 		dnsName: "example.org.",
 	}

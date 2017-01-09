@@ -1,6 +1,7 @@
 package consumers
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -20,18 +21,253 @@ type awsTestItem struct {
 	expectFail   bool
 }
 
-func checkTestError(t *testing.T, err error, expect bool) bool {
-	if err == nil && expect {
-		t.Error("failed to fail")
-		return false
+func TestEndpointToAlias(t *testing.T) {
+	groupID := "test"
+	zoneID := "test"
+	client := &awsConsumer{
+		groupID: groupID,
+	}
+	ep := &pkg.Endpoint{
+		DNSName:  "example.com",
+		IP:       "10.202.10.123",
+		Hostname: "amazon.elb.com",
+	}
+	rsA := client.endpointToAlias(ep, &zoneID)
+	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
+		*rsA.AliasTarget.DNSName != pkg.SanitizeDNSName(ep.Hostname) ||
+		*rsA.AliasTarget.HostedZoneId != zoneID {
+		t.Error("Should create an A record")
+	}
+}
+
+func TestGetAssignedTXTRecordObject(t *testing.T) {
+	groupID := "test"
+	zoneID := "test"
+	client := &awsConsumer{
+		groupID: groupID,
+	}
+	ep := &pkg.Endpoint{
+		DNSName:  "example.com",
+		IP:       "10.202.10.123",
+		Hostname: "amazon.elb.com",
+	}
+	rsA := client.endpointToAlias(ep, &zoneID)
+	rsTXT := client.getAssignedTXTRecordObject(rsA)
+	if *rsTXT.Type != "TXT" ||
+		*rsTXT.Name != "example.com." ||
+		len(rsTXT.ResourceRecords) != 1 ||
+		*rsTXT.ResourceRecords[0].Value != "\"mate:test\"" {
+		t.Error("Should create a TXT record")
+	}
+}
+
+func TestGetZoneIDForEndpoint(t *testing.T) {
+	hostedZonesMap := map[string]string{
+		"example.com":  "example.com",
+		"test.com":     "test.com",
+		"sub.test.com": "sub.test.com",
+	}
+	record1 := &route53.ResourceRecordSet{
+		Name: aws.String("name.example.com"),
+	}
+	record2 := &route53.ResourceRecordSet{
+		Name: aws.String("name.example.test.com"),
+	}
+	record3 := &route53.ResourceRecordSet{
+		Name: aws.String("name.sub.test.com"),
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record1) != "example.com" {
+		t.Errorf("Incorrect zone id for %v", record1)
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record2) != "test.com" {
+		t.Errorf("Incorrect zone id for %v", record2)
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record3) != "sub.test.com" {
+		t.Errorf("Incorrect zone id for %v", record3)
+	}
+}
+
+func sameTargets(lb1, lb2 string) bool {
+	return lb1 == lb2
+}
+
+func TestRecordInfo(t *testing.T) {
+	groupID := "test"
+	client := &awsConsumer{
+		groupID: groupID,
+	}
+	records := []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("test.example.com."),
+			AliasTarget: &route53.AliasTarget{
+				DNSName:      aws.String("abc.def.ghi"),
+				HostedZoneId: aws.String("123"),
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+	}
+	recordInfoMap := client.recordInfo(records)
+	if len(recordInfoMap) != 1 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := recordInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("abc.def.ghi", val.Target) {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+	records = []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+	}
+	recordInfoMap = client.recordInfo(records)
+	if len(recordInfoMap) != 1 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := recordInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("", val.Target) {
+			t.Errorf("Incorrect record info for %v", records)
+		}
 	}
 
-	if err != nil && !expect {
-		t.Error("unexpected error", err)
-		return false
+	records = []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("new.example.com."),
+			AliasTarget: &route53.AliasTarget{
+				DNSName:      aws.String("elb.com"),
+				HostedZoneId: aws.String("123"),
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("new.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String("mate:new-group-id"),
+				},
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("test.example.com."),
+			AliasTarget: &route53.AliasTarget{
+				DNSName:      aws.String("abc.def.ghi"),
+				HostedZoneId: aws.String("123"),
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+	}
+	recordInfoMap = client.recordInfo(records)
+	if len(recordInfoMap) != 2 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := recordInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("abc.def.ghi", val.Target) {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+	if val, exist := recordInfoMap["new.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != "mate:new-group-id" {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("elb.com", val.Target) {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+}
+
+func TestGetGroupID(t *testing.T) {
+	groupID := "test"
+	client := &awsConsumer{
+		groupID: groupID,
+	}
+	if client.getGroupID() != "\"mate:test\"" {
+		t.Errorf("Should return TXT value of \"mate:test\", when test is passed")
+	}
+}
+
+func TestGetRecordTarget(t *testing.T) {
+	groupID := "test"
+	client := &awsConsumer{
+		groupID: groupID,
+	}
+	r1 := &route53.ResourceRecordSet{
+		Type: aws.String("A"),
+		Name: aws.String("another.example.com."),
+		AliasTarget: &route53.AliasTarget{
+			DNSName:      aws.String("200.elb.com"),
+			HostedZoneId: aws.String("123"),
+		},
+	}
+	r2 := &route53.ResourceRecordSet{
+		Type: aws.String("TXT"),
+		Name: aws.String("another.example.com."),
+		ResourceRecords: []*route53.ResourceRecord{
+			&route53.ResourceRecord{
+				Value: aws.String("ignored"),
+			},
+		},
+	}
+	r3 := &route53.ResourceRecordSet{
+		Type: aws.String("CNAME"),
+		Name: aws.String("cname.example.com."),
+		ResourceRecords: []*route53.ResourceRecord{
+			&route53.ResourceRecord{
+				Value: aws.String("some-elb.amazon.com"),
+			},
+		},
 	}
 
-	return true
+	if target := client.getRecordTarget(r1); target != "200.elb.com" {
+		t.Errorf("Incorrect target extracted for %v, expected: %s, got: %s", r1, "200.elb.com", target)
+	}
+	if target := client.getRecordTarget(r2); target != "" {
+		t.Errorf("Incorrect target extracted for %v, expected: %s, got: %s", r2, "", target)
+	}
+	if target := client.getRecordTarget(r3); target != "some-elb.amazon.com" {
+		t.Errorf("Incorrect target extracted for %v, expected: %s, got: %s", r3, "some-elb-amazon.com", target)
+	}
 }
 
 func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*route53.ResourceRecordSet) bool {
@@ -78,23 +314,14 @@ func NonEmptyMapLength(Map map[string][]*route53.ResourceRecordSet) int {
 
 func testAWSConsumer(t *testing.T, ti awsTestItem) {
 	groupID := "testing-group-id"
-	client := awstest.NewClient(groupID)
-	if ti.fail {
-		client.FailNext()
-	}
+	client := awstest.NewClient(groupID, awstest.GetOriginalState(fmt.Sprintf("\"mate:%s\"", groupID)), awstest.GetHostedZones())
 
-	consumer := withClient(client)
+	consumer := withClient(client, groupID)
 
 	if ti.process == nil {
-		err := consumer.Sync(ti.sync)
-		if !checkTestError(t, err, ti.expectFail) {
-			return
-		}
+		consumer.Sync(ti.sync)
 	} else {
-		err := consumer.Process(ti.process)
-		if !checkTestError(t, err, ti.expectFail) {
-			return
-		}
+		consumer.Process(ti.process)
 	}
 	if NonEmptyMapLength(client.LastUpsert) != NonEmptyMapLength(ti.expectUpsert) {
 		t.Error("failed to post the right upsert items. Number of hosted zones is different.", client.LastUpsert, ti.expectUpsert)

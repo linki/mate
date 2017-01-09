@@ -1,4 +1,4 @@
-package fake
+package producers
 
 import (
 	"fmt"
@@ -19,33 +19,31 @@ const (
 	hostnameMode  = "hostname"
 )
 
-var params struct {
+var fakeParams struct {
 	dnsName      string
 	mode         string
 	targetDomain string
 }
 
 type fakeProducer struct {
-	channel      chan *pkg.Endpoint
 	mode         string
 	dnsName      string
 	targetDomain string
 }
 
 func init() {
-	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default(defaultDomain).StringVar(&params.dnsName)
-	kingpin.Flag("fake-mode", "The mode to run in.").Default(ipMode).StringVar(&params.mode)
-	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default(defaultDomain).StringVar(&params.targetDomain)
+	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default(defaultDomain).StringVar(&fakeParams.dnsName)
+	kingpin.Flag("fake-mode", "The mode to run in.").Default(ipMode).StringVar(&fakeParams.mode)
+	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default(defaultDomain).StringVar(&fakeParams.targetDomain)
 
 	rand.Seed(time.Now().UnixNano())
 }
 
 func NewFake() (*fakeProducer, error) {
 	return &fakeProducer{
-		channel:      make(chan *pkg.Endpoint),
-		mode:         params.mode,
-		dnsName:      params.dnsName,
-		targetDomain: params.targetDomain,
+		mode:         fakeParams.mode,
+		dnsName:      fakeParams.dnsName,
+		targetDomain: fakeParams.targetDomain,
 	}, nil
 }
 

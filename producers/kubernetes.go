@@ -1,4 +1,4 @@
-package kubernetes
+package producers
 
 import (
 	"errors"
@@ -16,7 +16,7 @@ const (
 	annotationKey = "zalando.org/dnsname"
 )
 
-var params struct {
+var kubernetesParams struct {
 	project string
 	zone    string
 
@@ -30,12 +30,12 @@ type kubernetesProducer struct {
 }
 
 func init() {
-	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&params.kubeServer)
-	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&params.format)
+	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&kubernetesParams.kubeServer)
+	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&kubernetesParams.format)
 }
 
-func NewProducer() (*kubernetesProducer, error) {
-	if params.format == "" {
+func NewKubernetes() (*kubernetesProducer, error) {
+	if kubernetesParams.format == "" {
 		return nil, errors.New("Please provide --kubernetes-format")
 	}
 
