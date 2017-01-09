@@ -1,4 +1,4 @@
-package kubernetes
+package producers
 
 import (
 	"errors"
@@ -18,7 +18,7 @@ const (
 	annotationKey = "zalando.org/dnsname"
 )
 
-var params struct {
+var kubernetesParams struct {
 	project string
 	zone    string
 
@@ -34,13 +34,13 @@ type kubernetesProducer struct {
 }
 
 func init() {
-	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&params.kubeServer)
-	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&params.format)
-	kingpin.Flag("enable-node-port-services", "When true, generates DNS entries for type=NodePort services").BoolVar(&params.enableNodePorts)
+	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&kubernetesParams.kubeServer)
+	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&kubernetesParams.format)
+	kingpin.Flag("enable-node-port-services", "When true, generates DNS entries for type=NodePort services").BoolVar(&kubernetesParams.enableNodePorts)
 }
 
-func NewProducer() (*kubernetesProducer, error) {
-	if params.format == "" {
+func NewKubernetes() (*kubernetesProducer, error) {
+	if kubernetesParams.format == "" {
 		return nil, errors.New("Please provide --kubernetes-format")
 	}
 
@@ -58,7 +58,7 @@ func NewProducer() (*kubernetesProducer, error) {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
-	if params.enableNodePorts {
+	if kubernetesParams.enableNodePorts {
 		producer.nodePorts, err = NewKubernetesNodePorts()
 	} else {
 		producer.nodePorts, err = null.NewNull()

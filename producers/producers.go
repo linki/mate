@@ -4,17 +4,15 @@ import (
 	"fmt"
 
 	"github.com/zalando-incubator/mate/interfaces"
-	"github.com/zalando-incubator/mate/producers/fake"
-	"github.com/zalando-incubator/mate/producers/kubernetes"
 	"github.com/zalando-incubator/mate/producers/null"
 )
 
 func New(name string) (interfaces.Producer, error) {
 	switch name {
 	case "kubernetes":
-		return kubernetes.NewProducer()
+		return NewKubernetes()
 	case "fake":
-		return fake.NewFake()
+		return NewFake()
 	case "null":
 		return null.NewNull()
 	}

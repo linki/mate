@@ -1,0 +1,22 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: mate
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mate
+    spec:
+      containers:
+      - name: mate
+        image: registry.opensource.zalan.do/teapot/mate:v0.3.0
+        args:
+        - --producer=kubernetes
+        - --kubernetes-format={{.Namespace}}-{{.Name}}.example.com
+        - --consumer=aws
+        - --consumer=google
+        - --google-project=my-project
+        - --google-zone=example-com
+        - --google-record-group-id=my-cluster
