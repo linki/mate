@@ -25,15 +25,15 @@ docker run registry.opensource.zalan.do/teapot/mate:v0.4.0 --help
 
 1. Supports both Google and Amazon Cloud Providers
 2. Complete and safe management of DNS records for both services and ingress resources. Only records created by Mate
-will be updated and deleted. 
+will be updated and deleted.
 3. Immediate updates via Kubernetes event listener and periodic resync of all endpoints to match the Kubernetes state.
-4. Allows to specify record DNS via Service Annotations, Ingress Rules or passed in go-template 
+4. Allows to specify record DNS via Service Annotations, Ingress Rules or passed in go-template
 5. Pluggable consumers and producers (see below)
 6. Supports multiple hosted zones in AWS Route53
 
 # Usage
 
-Depending on the cloud provider the invocation differs slightly. For more detailed step-by-step guide see [examples](mate/tree/master/examples). 
+Depending on the cloud provider the invocation differs slightly. For more detailed step-by-step guide see [examples](mate/tree/master/examples).
 
 ### AWS
 
@@ -64,6 +64,12 @@ $ mate \
 ```
 
 Analogous to the AWS case with the difference that it doesn't use the AWS specific Alias functionality but plain A records.
+
+### Permissions
+
+`Mate` needs permission to modify DNS records in your chosen cloud provider.
+On GCP this maps to using service accounts and scopes, on AWS to IAM roles and policies.
+For detailed instructions see [the examples](mate/tree/master/examples).
 
 ### Kubernetes
 
