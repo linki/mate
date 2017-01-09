@@ -5,7 +5,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/route53"
 )
 
-func getHostedZones() map[string]string {
+func GetHostedZones() map[string]string {
 	return map[string]string{
 		"example.com.":     "example.com.",
 		"foo.com.":         "foo.com.",
@@ -13,7 +13,7 @@ func getHostedZones() map[string]string {
 	}
 }
 
-func getOriginalState(groupID string) map[string][]*route53.ResourceRecordSet {
+func GetOriginalState(groupID string) map[string][]*route53.ResourceRecordSet {
 	return map[string][]*route53.ResourceRecordSet{
 		"foo.com.": []*route53.ResourceRecordSet{
 			&route53.ResourceRecordSet{
