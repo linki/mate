@@ -1,4 +1,4 @@
-package kubernetes
+package producers
 
 import (
 	"bytes"
@@ -23,14 +23,14 @@ type kubernetesServiceProducer struct {
 }
 
 func NewKubernetesService() (*kubernetesServiceProducer, error) {
-	client, err := kubernetes.NewClient(params.kubeServer)
+	client, err := kubernetes.NewClient(kubernetesParams.kubeServer)
 	if err != nil {
 		return nil, fmt.Errorf("[Service] Unable to setup Kubernetes API client: %v", err)
 	}
 
 	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
 		"trimPrefix": strings.TrimPrefix,
-	}).Parse(params.format)
+	}).Parse(kubernetesParams.format)
 	if err != nil {
 		return nil, fmt.Errorf("[Service] Error parsing template: %s", err)
 	}

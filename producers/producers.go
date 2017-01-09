@@ -5,8 +5,6 @@ import (
 	"sync"
 
 	"github.com/zalando-incubator/mate/pkg"
-	"github.com/zalando-incubator/mate/producers/fake"
-	"github.com/zalando-incubator/mate/producers/kubernetes"
 )
 
 type Producer interface {
@@ -17,9 +15,9 @@ type Producer interface {
 func New(name string) (Producer, error) {
 	switch name {
 	case "kubernetes":
-		return kubernetes.NewProducer()
+		return NewKubernetes()
 	case "fake":
-		return fake.NewFake()
+		return NewFake()
 	}
 	return nil, fmt.Errorf("Unknown producer '%s'.", name)
 }
