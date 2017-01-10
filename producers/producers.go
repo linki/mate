@@ -18,6 +18,8 @@ func New(name string) (Producer, error) {
 		return NewKubernetes()
 	case "fake":
 		return NewFake()
+	case "null":
+		return NewNull()
 	}
 	return nil, fmt.Errorf("Unknown producer '%s'.", name)
 }

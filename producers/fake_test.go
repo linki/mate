@@ -10,7 +10,7 @@ import (
 )
 
 func TestFakeReturnsTenEndpoints(t *testing.T) {
-	endpoints := newEndpoints(t, nil)
+	endpoints := newFakeEndpoints(t, nil)
 
 	count := len(endpoints)
 	if count != 10 {
@@ -21,7 +21,7 @@ func TestFakeReturnsTenEndpoints(t *testing.T) {
 func TestFakeEndpointsBelongToDomain(t *testing.T) {
 	validRecord := regexp.MustCompile(`^.{2}\.example\.org\.$`)
 
-	endpoints := newEndpoints(t, nil)
+	endpoints := newFakeEndpoints(t, nil)
 
 	for _, e := range endpoints {
 		valid := validRecord.MatchString(e.DNSName)
@@ -32,7 +32,7 @@ func TestFakeEndpointsBelongToDomain(t *testing.T) {
 }
 
 func TestFakeEndpointsResolveToIPAddresses(t *testing.T) {
-	endpoints := newEndpoints(t, nil)
+	endpoints := newFakeEndpoints(t, nil)
 
 	for _, e := range endpoints {
 		ip := net.ParseIP(e.IP)
@@ -48,7 +48,7 @@ func TestFakeEndpointsResolveToHostnamesInHostnameMode(t *testing.T) {
 		dnsName: "example.org.",
 	}
 
-	endpoints := newEndpoints(t, producer)
+	endpoints := newFakeEndpoints(t, producer)
 
 	for _, e := range endpoints {
 		if e.Hostname == "" {
@@ -85,7 +85,7 @@ func TestNewFakeReadsConfigurationFromParams(t *testing.T) {
 	}
 }
 
-func newProducer() *fakeProducer {
+func newFakeProducer() *fakeProducer {
 	producer := &fakeProducer{
 		mode:    ipMode,
 		dnsName: "example.org.",
@@ -94,9 +94,9 @@ func newProducer() *fakeProducer {
 	return producer
 }
 
-func newEndpoints(t *testing.T, producer *fakeProducer) []*pkg.Endpoint {
+func newFakeEndpoints(t *testing.T, producer *fakeProducer) []*pkg.Endpoint {
 	if producer == nil {
-		producer = newProducer()
+		producer = newFakeProducer()
 	}
 
 	endpoints, err := producer.Endpoints()
