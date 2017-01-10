@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/zalando-incubator/mate/interfaces"
-	"github.com/zalando-incubator/mate/producers/null"
 )
 
 func New(name string) (interfaces.Producer, error) {
@@ -14,7 +13,7 @@ func New(name string) (interfaces.Producer, error) {
 	case "fake":
 		return NewFake()
 	case "null":
-		return null.NewNull()
+		return NewNull()
 	}
 	return nil, fmt.Errorf("Unknown producer '%s'.", name)
 }

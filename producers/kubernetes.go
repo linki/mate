@@ -11,7 +11,6 @@ import (
 
 	"github.com/zalando-incubator/mate/interfaces"
 	"github.com/zalando-incubator/mate/pkg"
-	"github.com/zalando-incubator/mate/producers/null"
 )
 
 const (
@@ -61,7 +60,7 @@ func NewKubernetes() (*kubernetesProducer, error) {
 	if kubernetesParams.enableNodePorts {
 		producer.nodePorts, err = NewKubernetesNodePorts()
 	} else {
-		producer.nodePorts, err = null.NewNull()
+		producer.nodePorts, err = NewNull()
 	}
 	if err != nil {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
