@@ -34,7 +34,7 @@ type kubernetesProducer struct {
 func init() {
 	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&kubernetesParams.kubeServer)
 	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&kubernetesParams.format)
-	kingpin.Flag("enable-node-port-services", "When true, generates DNS entries for type=NodePort services").BoolVar(&kubernetesParams.enableNodePorts)
+	kingpin.Flag("kubernetes-enable-node-port-services", "When true, generates DNS entries for type=NodePort services").BoolVar(&kubernetesParams.enableNodePorts)
 }
 
 func NewKubernetes() (*kubernetesProducer, error) {
