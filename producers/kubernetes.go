@@ -20,9 +20,9 @@ var kubernetesParams struct {
 	project string
 	zone    string
 
-	kubeServer      *url.URL
-	format          string
-	enableNodePorts bool
+	kubeServer     *url.URL
+	format         string
+	trackNodePorts bool
 }
 
 type kubernetesProducer struct {
@@ -34,7 +34,7 @@ type kubernetesProducer struct {
 func init() {
 	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&kubernetesParams.kubeServer)
 	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&kubernetesParams.format)
-	kingpin.Flag("kubernetes-enable-node-port-services", "When true, generates DNS entries for type=NodePort services").BoolVar(&kubernetesParams.enableNodePorts)
+	kingpin.Flag("kubernetes-track-node-ports", "When true, generates DNS entries for type=NodePort services").BoolVar(&kubernetesParams.trackNodePorts)
 }
 
 func NewKubernetes() (*kubernetesProducer, error) {
@@ -56,7 +56,7 @@ func NewKubernetes() (*kubernetesProducer, error) {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
-	if kubernetesParams.enableNodePorts {
+	if kubernetesParams.trackNodePorts {
 		producer.nodePorts, err = NewKubernetesNodePorts()
 	} else {
 		producer.nodePorts, err = NewNull()
