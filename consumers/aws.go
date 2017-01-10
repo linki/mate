@@ -40,7 +40,7 @@ func init() {
 
 // NewAWSConsumer reates a Consumer instance to sync and process DNS
 // entries in AWS Route53.
-func NewAWSRoute53() (Consumer, error) {
+func NewAWSConsumer() (Consumer, error) {
 	if params.awsGroupID == "" {
 		return nil, errors.New("please provide --aws-record-group-id")
 	}
