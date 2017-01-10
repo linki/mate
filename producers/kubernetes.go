@@ -9,7 +9,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	"github.com/zalando-incubator/mate/interfaces"
 	"github.com/zalando-incubator/mate/pkg"
 )
 
@@ -27,9 +26,9 @@ var kubernetesParams struct {
 }
 
 type kubernetesProducer struct {
-	ingress   interfaces.Producer
-	service   interfaces.Producer
-	nodePorts interfaces.Producer
+	ingress   Producer
+	service   Producer
+	nodePorts Producer
 }
 
 func init() {
