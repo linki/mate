@@ -42,6 +42,10 @@ func NewKubernetes() (*kubernetesProducer, error) {
 		return nil, errors.New("Please provide --kubernetes-format")
 	}
 
+	if kubernetesParams.trackNodePorts {
+		log.Infof("Please note, creating DNS entries for NodePort services doesn't currently work in combination with the AWS consumer.")
+	}
+
 	var err error
 
 	producer := &kubernetesProducer{}
