@@ -7,7 +7,7 @@ Mate synchronizes AWS Route53 or Google CloudDNS records with exposed Kubernetes
 
 When creating ingress objects or services with `Type=LoadBalancer` Kubernetes provisions an external load balancer to forward traffic to its cluster IP. Depending on the cloud provider this load balancer will get a random public IP or DNS name but no defined DNS record to point to it.
 
-Mate bridges this gap and synchronizes DNS records based on the service's or ingress' name and/or namespace. This allows exposed services to be seamlessly discovered even if the load balancer address changes or isn't known beforehand.
+Mate bridges this gap and synchronizes DNS records based on the service's or ingress' name and/or namespace. This allows exposed services to be seamlessly discovered even if the load balancer address changes or isn't known beforehand. Additionally, Mate can create DNS entries for each of your `Type=NodePort` services pointing to all nodes in your cluster.
 
 # Install
 
@@ -67,7 +67,7 @@ Analogous to the AWS case with the difference that it doesn't use the AWS specif
 
 ### Permissions
 
-`Mate` needs permission to modify DNS records in your chosen cloud provider.
+Mate needs permission to modify DNS records in your chosen cloud provider.
 On GCP this maps to using service accounts and scopes, on AWS to IAM roles and policies.
 For detailed instructions see [the examples](mate/tree/master/examples).
 
@@ -105,6 +105,7 @@ You can choose any combination. `Kubernetes` + `Stdout` is useful for testing yo
 # Caveats
 
 * Although the modular design allows to specify it, you currently cannot create DNS records on Google CloudDNS for a cluster running on AWS because AWS ELBs will send ELB endpoints in the form of DNS names whereas the Google consumer expects them to be IPs and vice versa.
+* Creating DNS entries for NodePort services doesn't currently work in combination with the AWS consumer.
 
 # License
 
