@@ -59,7 +59,7 @@ $ mate \
     --kubernetes-format="{{.Namespace}}-{{.Name}}.example.com" \
     --consumer=google \
     --google-project=bar \
-    --google-zone=example-com
+    --google-zone=example-com \
     --google-record-group-id=foo
 ```
 
