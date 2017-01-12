@@ -33,7 +33,7 @@ will be updated and deleted.
 
 # Usage
 
-Depending on the cloud provider the invocation differs slightly. For more detailed step-by-step guide see [examples](mate/tree/master/examples).
+Depending on the cloud provider the invocation differs slightly. For more detailed step-by-step guide see [examples](examples).
 
 ### AWS
 
