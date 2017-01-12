@@ -23,7 +23,7 @@ spec:
         - --consumer=aws
         - --aws-record-group-id=my-cluster
 ```
-*Note*: `example.com` from the manfiest should be changed to the real hosted zone existing in your AWS account.
+*Note*: `example.com` from the manifest should be changed to the real hosted zone existing in your AWS account.
 ## Service
 
 Create a service using the following manifest [service](service.yaml):
@@ -42,7 +42,7 @@ spec:
   selector:
     app: behind-nginx-app
 ```
-Running `kubectl create -f service.yaml` will create a service in default namepsace and AWS will provision an ELB pointing to the service.
+Running `kubectl create -f service.yaml` will create a service in default namespace and AWS will provision an ELB pointing to the service.
 Shortly Mate will create a DNS record as according to the specified template (namespace-name.hosted-zone) pointing to the provisioned ELB:
 `default-nginx-service.example.com`.
 
