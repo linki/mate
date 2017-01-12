@@ -63,9 +63,11 @@ func TestGetAssignedTXTRecordObject(t *testing.T) {
 
 func TestGetZoneIDForEndpoint(t *testing.T) {
 	hostedZonesMap := map[string]string{
-		"example.com":  "example.com",
-		"test.com":     "test.com",
-		"sub.test.com": "sub.test.com",
+		"example.com":                    "id1",
+		"test.com":                       "id2",
+		"sub.test.com":                   "id3",
+		"long-sub1.internal.example.com": "id4",
+		"long-sub2.internal.example.com": "id5",
 	}
 	record1 := &route53.ResourceRecordSet{
 		Name: aws.String("name.example.com"),
@@ -76,14 +78,26 @@ func TestGetZoneIDForEndpoint(t *testing.T) {
 	record3 := &route53.ResourceRecordSet{
 		Name: aws.String("name.sub.test.com"),
 	}
-	if getZoneIDForEndpoint(hostedZonesMap, record1) != "example.com" {
+	record4 := &route53.ResourceRecordSet{
+		Name: aws.String("name.long-sub1.internal.example.com"),
+	}
+	record5 := &route53.ResourceRecordSet{
+		Name: aws.String("name.long-sub2.internal.example.com"),
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record1) != "id1" {
 		t.Errorf("Incorrect zone id for %v", record1)
 	}
-	if getZoneIDForEndpoint(hostedZonesMap, record2) != "test.com" {
+	if getZoneIDForEndpoint(hostedZonesMap, record2) != "id2" {
 		t.Errorf("Incorrect zone id for %v", record2)
 	}
-	if getZoneIDForEndpoint(hostedZonesMap, record3) != "sub.test.com" {
+	if getZoneIDForEndpoint(hostedZonesMap, record3) != "id3" {
 		t.Errorf("Incorrect zone id for %v", record3)
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record4) != "id4" {
+		t.Errorf("Incorrect zone id for %v", record4)
+	}
+	if getZoneIDForEndpoint(hostedZonesMap, record5) != "id5" {
+		t.Errorf("Incorrect zone id for %v", record5)
 	}
 }
 

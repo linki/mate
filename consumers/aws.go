@@ -213,13 +213,15 @@ func (a *awsConsumer) Process(endpoint *pkg.Endpoint) error {
 //i.e. if the record has dns name "test.sub.example.com" and route53 has two hosted zones "example.com" and "sub.example.com"
 //"sub.example.com" will be returned
 func getZoneIDForEndpoint(hostedZonesMap map[string]string, record *route53.ResourceRecordSet) string {
-	var match string
+	var matchName string
+	var matchID string
 	for zoneName, zoneID := range hostedZonesMap {
-		if strings.HasSuffix(aws.StringValue(record.Name), zoneName) && len(zoneName) > len(match) { //get the longest match for the dns name
-			match = zoneID
+		if strings.HasSuffix(aws.StringValue(record.Name), zoneName) && len(zoneName) > len(matchName) { //get the longest match for the dns name
+			matchName = zoneName
+			matchID = zoneID
 		}
 	}
-	return match
+	return matchID
 }
 
 //getGroupID returns the idenitifier for AWS records as stored in TXT records
