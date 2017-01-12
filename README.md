@@ -69,7 +69,7 @@ Analogous to the AWS case with the difference that it doesn't use the AWS specif
 
 Mate needs permission to modify DNS records in your chosen cloud provider.
 On GCP this maps to using service accounts and scopes, on AWS to IAM roles and policies.
-For detailed instructions see [the examples](mate/tree/master/examples).
+For detailed instructions see [the examples](examples).
 
 ### Kubernetes
 
