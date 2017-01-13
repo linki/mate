@@ -17,33 +17,46 @@ const (
 	defaultDomain = "example.org."
 	ipMode        = "ip"
 	hostnameMode  = "hostname"
+	fixedMode     = "fixed"
 )
 
 var fakeParams struct {
-	dnsName      string
-	mode         string
-	targetDomain string
+	dnsName       string
+	mode          string
+	targetDomain  string
+	fixedDNSName  string
+	fixedIP       string
+	fixedHostname string
 }
 
 type fakeProducer struct {
-	mode         string
-	dnsName      string
-	targetDomain string
+	mode          string
+	dnsName       string
+	targetDomain  string
+	fixedDNSName  string
+	fixedIP       string
+	fixedHostname string
 }
 
 func init() {
 	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default(defaultDomain).StringVar(&fakeParams.dnsName)
 	kingpin.Flag("fake-mode", "The mode to run in.").Default(ipMode).StringVar(&fakeParams.mode)
 	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default(defaultDomain).StringVar(&fakeParams.targetDomain)
+	kingpin.Flag("fake-fixed-dnsname", "The full fake DNS name to use.").StringVar(&fakeParams.fixedDNSName)
+	kingpin.Flag("fake-fixed-ip", "The full fake IP to use.").StringVar(&fakeParams.fixedIP)
+	kingpin.Flag("fake-fixed-hostname", "The full fake host name to use.").StringVar(&fakeParams.fixedHostname)
 
 	rand.Seed(time.Now().UnixNano())
 }
 
 func NewFake() (*fakeProducer, error) {
 	return &fakeProducer{
-		mode:         fakeParams.mode,
-		dnsName:      fakeParams.dnsName,
-		targetDomain: fakeParams.targetDomain,
+		mode:          fakeParams.mode,
+		dnsName:       fakeParams.dnsName,
+		targetDomain:  fakeParams.targetDomain,
+		fixedDNSName:  fakeParams.fixedDNSName,
+		fixedIP:       fakeParams.fixedIP,
+		fixedHostname: fakeParams.fixedHostname,
 	}, nil
 }
 
@@ -100,6 +113,10 @@ func (a *fakeProducer) generateEndpoint() (*pkg.Endpoint, error) {
 		).String()
 	case hostnameMode:
 		endpoint.Hostname = fmt.Sprintf("%s.%s", randomString(6), a.targetDomain)
+	case fixedMode:
+		endpoint.DNSName = a.fixedDNSName
+		endpoint.IP = a.fixedIP
+		endpoint.Hostname = a.fixedHostname
 	default:
 		return nil, fmt.Errorf("Unknown mode: %s", a.mode)
 	}
