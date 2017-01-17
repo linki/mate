@@ -23,7 +23,7 @@ spec:
         - --consumer=aws
         - --aws-record-group-id=my-cluster
 ```
-*Note*: `example.com` from the manifest should be changed to the real hosted zone existing in your AWS account.
+*Note*: `example.com` is a hosted zone where records are created. Mate does not create hosted zones, and it assumes there exist at least one hosted zone where the record with a given DNS can be placed.
 ## Service
 
 Create a service using the following manifest [service](service.yaml):
@@ -50,7 +50,7 @@ If you have `aws-cli` installed, this can be verified with (change `example.com`
 
 `aws route53 list-resource-record-sets --hosted-zone-id=*my-zone-id* --query "ResourceRecordSets[?Name == 'default-nginx-service.example.com.']"`
 
-If you do not wish to use a template approach, or want to create a record in another hosted-zone, this can be achieved by specifying desired DNS
+If you do not wish to use a template approach, or want to create a record in another hosted-zone (different from specified in Mate deployment manifest), this can be achieved by specifying desired DNS
 in service annotations, e.g.:
 ```
 ...
@@ -92,8 +92,8 @@ https://github.com/kubernetes/contrib/tree/master/ingress/controllers
 
 
 Your Ingress controller should provision a Load Balancer (both ELB and ALB are supported by Mate) and update the ingress resource.
-Once LB is created Mate will create a DNS records, as specified in `rules.Host` fields, e.g. in the specified example it will create
-two records in two separate hosted zones `bar-app.example.com` and `foo-app.foo.com`.
+Once LB is created Mate will create a DNS records, as specified in `rules.Host` field of created ingress resource, e.g. in the specified example it will create
+two records in two separate hosted zones `bar-app.example.com` and `foo-app.foo.com` (assuming both exist in your AWS account).
 
 ### Permissions
 
