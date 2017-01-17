@@ -8,26 +8,10 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
+	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/pkg"
 )
-
-const (
-	defaultDomain = "example.org."
-	ipMode        = "ip"
-	hostnameMode  = "hostname"
-	fixedMode     = "fixed"
-)
-
-var fakeParams struct {
-	dnsName       string
-	mode          string
-	targetDomain  string
-	fixedDNSName  string
-	fixedIP       string
-	fixedHostname string
-}
 
 type fakeProducer struct {
 	mode          string
@@ -39,24 +23,17 @@ type fakeProducer struct {
 }
 
 func init() {
-	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default(defaultDomain).StringVar(&fakeParams.dnsName)
-	kingpin.Flag("fake-mode", "The mode to run in.").Default(ipMode).StringVar(&fakeParams.mode)
-	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default(defaultDomain).StringVar(&fakeParams.targetDomain)
-	kingpin.Flag("fake-fixed-dnsname", "The full fake DNS name to use.").StringVar(&fakeParams.fixedDNSName)
-	kingpin.Flag("fake-fixed-ip", "The full fake IP to use.").StringVar(&fakeParams.fixedIP)
-	kingpin.Flag("fake-fixed-hostname", "The full fake host name to use.").StringVar(&fakeParams.fixedHostname)
-
 	rand.Seed(time.Now().UnixNano())
 }
 
-func NewFake() (*fakeProducer, error) {
+func NewFake(cfg *config.MateConfig) (*fakeProducer, error) {
 	return &fakeProducer{
-		mode:          fakeParams.mode,
-		dnsName:       fakeParams.dnsName,
-		targetDomain:  fakeParams.targetDomain,
-		fixedDNSName:  fakeParams.fixedDNSName,
-		fixedIP:       fakeParams.fixedIP,
-		fixedHostname: fakeParams.fixedHostname,
+		mode:          cfg.FakeMode,
+		dnsName:       cfg.FakeDNSName,
+		targetDomain:  cfg.FakeTargetDomain,
+		fixedDNSName:  cfg.FakeFixedDNSName,
+		fixedIP:       cfg.FakeFixedIP,
+		fixedHostname: cfg.FakeFixedHostname,
 	}, nil
 }
 
@@ -104,16 +81,16 @@ func (a *fakeProducer) generateEndpoint() (*pkg.Endpoint, error) {
 	}
 
 	switch a.mode {
-	case ipMode:
+	case "ip":
 		endpoint.IP = net.IPv4(
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 		).String()
-	case hostnameMode:
+	case "hostname":
 		endpoint.Hostname = fmt.Sprintf("%s.%s", randomString(6), a.targetDomain)
-	case fixedMode:
+	case "fixed":
 		endpoint.DNSName = a.fixedDNSName
 		endpoint.IP = a.fixedIP
 		endpoint.Hostname = a.fixedHostname

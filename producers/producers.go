@@ -15,9 +15,9 @@ type Producer interface {
 func New(name string) (Producer, error) {
 	switch name {
 	case "kubernetes":
-		return NewKubernetes()
+		return NewKubernetes(nil)
 	case "fake":
-		return NewFake()
+		return NewFake(nil)
 	case "null":
 		return NewNull()
 	}

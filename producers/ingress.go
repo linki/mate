@@ -9,6 +9,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/pkg"
 	"github.com/zalando-incubator/mate/pkg/kubernetes"
 	k8s "k8s.io/client-go/kubernetes"
@@ -22,15 +23,15 @@ type kubernetesIngressProducer struct {
 	tmpl   *template.Template
 }
 
-func NewKubernetesIngress() (*kubernetesIngressProducer, error) {
-	client, err := kubernetes.NewClient(kubernetesParams.kubeServer)
+func NewKubernetesIngress(params *config.KubernetesConfig) (*kubernetesIngressProducer, error) {
+	client, err := kubernetes.NewClient(params.KubeServer)
 	if err != nil {
 		return nil, fmt.Errorf("[Ingress] Unable to setup Kubernetes API client: %v", err)
 	}
 
 	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
 		"trimPrefix": strings.TrimPrefix,
-	}).Parse(kubernetesParams.format)
+	}).Parse(params.KubeFormat)
 	if err != nil {
 		return nil, fmt.Errorf("[Ingress] Error parsing template: %s", err)
 	}
