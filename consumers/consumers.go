@@ -10,7 +10,6 @@ import (
 var params struct {
 	domain        string
 	project       string
-	zone          string
 	recordGroupID string
 	awsAccountID  string
 	awsRole       string
