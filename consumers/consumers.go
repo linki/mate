@@ -8,33 +8,23 @@ import (
 	"github.com/zalando-incubator/mate/pkg"
 )
 
-// var params struct {
-// 	domain        string
-// 	project       string
-// 	zone          string
-// 	recordGroupID string
-// 	awsAccountID  string
-// 	awsRole       string
-// 	awsHostedZone string
-// 	awsGroupID    string
-// }
-
+// Consumer interface
 type Consumer interface {
 	Sync([]*pkg.Endpoint) error
 	Consume(<-chan *pkg.Endpoint, chan<- error, <-chan struct{}, *sync.WaitGroup)
 	Process(*pkg.Endpoint) error
 }
 
-// Returns a Consumer implementation.
-func New(name string, cfg *config.MateConfig) (Consumer, error) {
-	switch name {
+// New returns a Consumer implementation.
+func New(cfg *config.MateConfig) (Consumer, error) {
+	switch cfg.Consumer {
 	case "google":
-		return NewGoogleDNS(cfg.GoogleConfig)
+		return NewGoogleDNS(cfg.GoogleZone, cfg.GoogleProject, cfg.GoogleRecordGroupID)
 	case "aws":
-		return NewAWSConsumer(cfg.AWSConfig)
+		return NewAWSConsumer(cfg.AWSRecordGroupID)
 	case "stdout":
 		return NewStdout()
 	default:
-		return nil, fmt.Errorf("Unknown consumer '%s'.", name)
+		return nil, fmt.Errorf("Unknown consumer '%s'.", cfg.Consumer)
 	}
 }

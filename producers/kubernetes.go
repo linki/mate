@@ -3,11 +3,11 @@ package producers
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/pkg"
 )
 
@@ -21,8 +21,14 @@ type kubernetesProducer struct {
 	nodePorts Producer
 }
 
-func NewKubernetes(cfg *config.KubernetesConfig) (*kubernetesProducer, error) {
-	if cfg.KubeFormat == "" {
+type KubernetesOptions struct {
+	APIServer      *url.URL
+	Format         string
+	TrackNodePorts bool
+}
+
+func NewKubernetes(cfg *KubernetesOptions) (*kubernetesProducer, error) {
+	if cfg.Format == "" {
 		return nil, errors.New("Please provide --kubernetes-format")
 	}
 

@@ -20,12 +20,12 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	p, err := producers.New(cfg.Producer)
+	p, err := producers.New(cfg)
 	if err != nil {
 		log.Fatalf("Error creating producer: %v", err)
 	}
 
-	c, err := consumers.NewSynced(cfg.Consumer)
+	c, err := consumers.NewSynced(cfg)
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}

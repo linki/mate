@@ -3,47 +3,25 @@ package config
 import kingpin "gopkg.in/alecthomas/kingpin.v2"
 import "net/url"
 
-const (
-
-	// fake producer default config
-	fakeDefaultDomain = "example.org."
-	fakeIPMode        = "ip"
-	fakeHostnameMode  = "hostname"
-	fakeFixedMode     = "fixed"
-)
-
 type MateConfig struct {
 	Producer string
 	Consumer string
 	Debug    bool
 	SyncOnly bool
 
-	*FakeProducerConfig
-	*KubernetesConfig
-	*AWSConfig
-	*GoogleConfig
-}
-
-type FakeProducerConfig struct {
 	FakeDNSName       string
 	FakeMode          string
 	FakeTargetDomain  string
 	FakeFixedDNSName  string
 	FakeFixedIP       string
 	FakeFixedHostname string
-}
 
-type KubernetesConfig struct {
 	KubeServer     *url.URL
 	KubeFormat     string
 	TrackNodePorts bool
-}
 
-type AWSConfig struct {
 	AWSRecordGroupID string
-}
 
-type GoogleConfig struct {
 	GoogleProject       string
 	GoogleZone          string
 	GoogleRecordGroupID string
@@ -60,9 +38,9 @@ func (cfg *MateConfig) ParseFlags() {
 	kingpin.Flag("debug", "Enable debug logging.").BoolVar(&cfg.Debug)
 	kingpin.Flag("sync-only", "Disable event watcher").BoolVar(&cfg.SyncOnly)
 
-	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default(fakeDefaultDomain).StringVar(&cfg.FakeDNSName)
-	kingpin.Flag("fake-mode", "The mode to run in.").Default(fakeIPMode).StringVar(&cfg.FakeMode)
-	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default(fakeDefaultDomain).StringVar(&cfg.FakeTargetDomain)
+	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").StringVar(&cfg.FakeDNSName)
+	kingpin.Flag("fake-mode", "The mode to run in.").StringVar(&cfg.FakeMode)
+	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").StringVar(&cfg.FakeTargetDomain)
 	kingpin.Flag("fake-fixed-dnsname", "The full fake DNS name to use.").StringVar(&cfg.FakeFixedDNSName)
 	kingpin.Flag("fake-fixed-ip", "The full fake IP to use.").StringVar(&cfg.FakeFixedIP)
 	kingpin.Flag("fake-fixed-hostname", "The full fake host name to use.").StringVar(&cfg.FakeFixedHostname)

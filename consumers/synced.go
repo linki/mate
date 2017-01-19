@@ -16,8 +16,8 @@ type SyncedConsumer struct {
 // one operation at a time, and blocks
 // concurrent operations until the current one
 // finishes.
-func NewSynced(name string, cfg *config.MateConfig) (Consumer, error) {
-	consumer, err := New(name, cfg)
+func NewSynced(cfg *config.MateConfig) (Consumer, error) {
+	consumer, err := New(cfg)
 	if err != nil {
 		return nil, err
 	}

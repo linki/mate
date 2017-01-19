@@ -9,8 +9,12 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/pkg"
+)
+
+const (
+	defaultFakeDomain = "example.org."
+	defaultFakeMode   = "ip"
 )
 
 type fakeProducer struct {
@@ -22,18 +26,34 @@ type fakeProducer struct {
 	fixedHostname string
 }
 
+type FakeProducerOptions struct {
+	DNSName       string
+	Mode          string
+	TargetDomain  string
+	FixedDNSName  string
+	FixedIP       string
+	FixedHostname string
+}
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func NewFake(cfg *config.MateConfig) (*fakeProducer, error) {
+func NewFake(cfg *FakeProducerOptions) (*fakeProducer, error) {
+	if cfg.DNSName == "" {
+		cfg.DNSName = defaultFakeDomain
+	}
+	if cfg.Mode == "" {
+		cfg.Mode = defaultFakeMode
+	}
+
 	return &fakeProducer{
-		mode:          cfg.FakeMode,
-		dnsName:       cfg.FakeDNSName,
-		targetDomain:  cfg.FakeTargetDomain,
-		fixedDNSName:  cfg.FakeFixedDNSName,
-		fixedIP:       cfg.FakeFixedIP,
-		fixedHostname: cfg.FakeFixedHostname,
+		mode:          cfg.Mode,
+		dnsName:       cfg.DNSName,
+		targetDomain:  cfg.TargetDomain,
+		fixedDNSName:  cfg.FixedDNSName,
+		fixedIP:       cfg.FixedIP,
+		fixedHostname: cfg.FixedHostname,
 	}, nil
 }
 

@@ -11,16 +11,16 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
-	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/pkg"
 	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 )
 
+// AWSClient interface
 type AWSClient interface {
 	ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error)
 	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error
-	GetCanonicalZoneIDs(lbDNS []string) (map[string]string, error)
-	GetHostedZones() (map[string]string, error)
+	GetCanonicalZoneIDs(lbDNS []string) (map[string]string, error) //get hosted zone ids for the LBs
+	GetHostedZones() (map[string]string, error)                    //get all route53 hosted zones for the account
 }
 
 type awsConsumer struct {
@@ -35,11 +35,11 @@ const (
 
 // NewAWSConsumer reates a Consumer instance to sync and process DNS
 // entries in AWS Route53.
-func NewAWSConsumer(cfg *config.AWSConfig) (Consumer, error) {
-	if cfg.AWSRecordGroupID == "" {
+func NewAWSConsumer(awsRecordGroupID string) (Consumer, error) {
+	if awsRecordGroupID == "" {
 		return nil, errors.New("please provide --aws-record-group-id")
 	}
-	return withClient(awsclient.New(awsclient.Options{}), cfg.AWSRecordGroupID), nil
+	return withClient(awsclient.New(awsclient.Options{}), awsRecordGroupID), nil
 }
 
 func withClient(c AWSClient, groupID string) *awsConsumer {

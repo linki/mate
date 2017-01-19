@@ -9,7 +9,6 @@ import (
 	"github.com/zalando-incubator/mate/pkg"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/zalando-incubator/mate/config"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/dns/v1"
@@ -33,16 +32,17 @@ type ownedRecord struct {
 	record *dns.ResourceRecordSet
 }
 
-func NewGoogleDNS(cfg *config.GoogleConfig) (Consumer, error) {
-	if cfg.GoogleZone == "" {
+// NewGoogleDNS creates
+func NewGoogleDNS(googleZone, googleProject, googleRecordGroupID string) (Consumer, error) {
+	if googleZone == "" {
 		return nil, errors.New("Please provide --google-zone")
 	}
 
-	if cfg.GoogleProject == "" {
+	if googleProject == "" {
 		return nil, errors.New("Please provide --google-project")
 	}
 
-	if cfg.GoogleRecordGroupID == "" {
+	if googleRecordGroupID == "" {
 		return nil, errors.New("Please provide --google-record-group-id")
 	}
 
@@ -61,14 +61,14 @@ func NewGoogleDNS(cfg *config.GoogleConfig) (Consumer, error) {
 		return nil, fmt.Errorf("Error creating DNS service: %v", err)
 	}
 
-	labels := []string{heritageLabel, labelPrefix + cfg.GoogleRecordGroupID}
+	labels := []string{heritageLabel, labelPrefix + googleRecordGroupID}
 
 	return &googleDNSConsumer{
 		client:  client,
 		labels:  labels,
-		groupID: cfg.GoogleRecordGroupID,
-		project: cfg.GoogleProject,
-		zone:    cfg.GoogleZone,
+		groupID: googleRecordGroupID,
+		project: googleProject,
+		zone:    googleZone,
 	}, nil
 }
 

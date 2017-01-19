@@ -12,7 +12,6 @@ import (
 	api "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/watch"
 
-	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/pkg"
 	"github.com/zalando-incubator/mate/pkg/kubernetes"
 	k8s "k8s.io/client-go/kubernetes"
@@ -23,15 +22,15 @@ type kubernetesNodePortsProducer struct {
 	tmpl   *template.Template
 }
 
-func NewKubernetesNodePorts(params *config.KubernetesConfig) (*kubernetesNodePortsProducer, error) {
-	client, err := kubernetes.NewClient(params.KubeServer)
+func NewKubernetesNodePorts(cfg *KubernetesOptions) (*kubernetesNodePortsProducer, error) {
+	client, err := kubernetes.NewClient(cfg.APIServer)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to setup Kubernetes API client: %v", err)
 	}
 
 	tmpl, err := template.New("endpoint").Funcs(template.FuncMap{
 		"trimPrefix": strings.TrimPrefix,
-	}).Parse(params.KubeFormat)
+	}).Parse(cfg.Format)
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing template: %s", err)
 	}
