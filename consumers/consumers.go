@@ -4,19 +4,20 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/pkg"
 )
 
-var params struct {
-	domain        string
-	project       string
-	zone          string
-	recordGroupID string
-	awsAccountID  string
-	awsRole       string
-	awsHostedZone string
-	awsGroupID    string
-}
+// var params struct {
+// 	domain        string
+// 	project       string
+// 	zone          string
+// 	recordGroupID string
+// 	awsAccountID  string
+// 	awsRole       string
+// 	awsHostedZone string
+// 	awsGroupID    string
+// }
 
 type Consumer interface {
 	Sync([]*pkg.Endpoint) error
@@ -25,23 +26,15 @@ type Consumer interface {
 }
 
 // Returns a Consumer implementation.
-func New(name string) (Consumer, error) {
-	var create func() (Consumer, error)
+func New(name string, cfg *config.MateConfig) (Consumer, error) {
 	switch name {
 	case "google":
-		create = NewGoogleDNS
+		return NewGoogleDNS(cfg.GoogleConfig)
 	case "aws":
-		create = NewAWSConsumer
+		return NewAWSConsumer(cfg.AWSConfig)
 	case "stdout":
-		create = NewStdout
+		return NewStdout()
 	default:
 		return nil, fmt.Errorf("Unknown consumer '%s'.", name)
 	}
-
-	c, err := create()
-	if err != nil {
-		return nil, fmt.Errorf("error creating consumer '%s': %v", name, err)
-	}
-
-	return c, nil
 }

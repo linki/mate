@@ -18,8 +18,10 @@ type MateConfig struct {
 	Debug    bool
 	SyncOnly bool
 
-	FakeProducerConfig
-	KubernetesConfig
+	*FakeProducerConfig
+	*KubernetesConfig
+	*AWSConfig
+	*GoogleConfig
 }
 
 type FakeProducerConfig struct {
@@ -35,6 +37,16 @@ type KubernetesConfig struct {
 	KubeServer     *url.URL
 	KubeFormat     string
 	TrackNodePorts bool
+}
+
+type AWSConfig struct {
+	AWSRecordGroupID string
+}
+
+type GoogleConfig struct {
+	GoogleProject       string
+	GoogleZone          string
+	GoogleRecordGroupID string
 }
 
 func New(version string) *MateConfig {
@@ -58,6 +70,12 @@ func (cfg *MateConfig) ParseFlags() {
 	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&cfg.KubeServer)
 	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&cfg.KubeFormat)
 	kingpin.Flag("kubernetes-track-node-ports", "When true, generates DNS entries for type=NodePort services").BoolVar(&cfg.TrackNodePorts)
+
+	kingpin.Flag("aws-record-group-id", "Identifier to filter mate created records ").StringVar(&cfg.AWSRecordGroupID)
+
+	kingpin.Flag("google-project", "Project ID that manages the zone").StringVar(&cfg.GoogleProject)
+	kingpin.Flag("google-zone", "Name of the zone to manage.").StringVar(&cfg.GoogleZone)
+	kingpin.Flag("google-record-group-id", "Name of the zone to manage.").StringVar(&cfg.GoogleRecordGroupID)
 
 	kingpin.Parse()
 }

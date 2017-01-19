@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/alecthomas/kingpin.v2"
-
 	"strings"
 
 	"sync"
@@ -13,6 +11,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/pkg"
 	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 )
@@ -34,17 +33,13 @@ const (
 	defaultTxtTTL        = int64(300)
 )
 
-func init() {
-	kingpin.Flag("aws-record-group-id", "Identifier to filter the mate records ").StringVar(&params.awsGroupID)
-}
-
 // NewAWSConsumer reates a Consumer instance to sync and process DNS
 // entries in AWS Route53.
-func NewAWSConsumer() (Consumer, error) {
-	if params.awsGroupID == "" {
+func NewAWSConsumer(cfg *config.AWSConfig) (Consumer, error) {
+	if cfg.AWSRecordGroupID == "" {
 		return nil, errors.New("please provide --aws-record-group-id")
 	}
-	return withClient(awsclient.New(awsclient.Options{}), params.awsGroupID), nil
+	return withClient(awsclient.New(awsclient.Options{}), cfg.AWSRecordGroupID), nil
 }
 
 func withClient(c AWSClient, groupID string) *awsConsumer {
