@@ -6,26 +6,26 @@ import (
 	"github.com/zalando-incubator/mate/pkg"
 )
 
-type SyncedConsumer struct {
+type SynchronizedConsumer struct {
 	sync.Mutex
 	Consumer
 }
 
-// NewSynced provides a consumer that can execute only
+// NewSynchronizedConsumer provides a consumer that can execute only
 // one operation at a time, and blocks
 // concurrent operations until the current one
 // finishes.
 func NewSynchronizedConsumer(consumer Consumer) (Consumer, error) {
-	return &SyncedConsumer{Consumer: consumer}, nil
+	return &SynchronizedConsumer{Consumer: consumer}, nil
 }
 
-func (s *SyncedConsumer) Sync(endpoints []*pkg.Endpoint) error {
+func (s *SynchronizedConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	s.Lock()
 	defer s.Unlock()
 	return s.Consumer.Sync(endpoints)
 }
 
-func (s *SyncedConsumer) Process(endpoint *pkg.Endpoint) error {
+func (s *SynchronizedConsumer) Process(endpoint *pkg.Endpoint) error {
 	s.Lock()
 	defer s.Unlock()
 	return s.Consumer.Process(endpoint)
