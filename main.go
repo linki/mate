@@ -17,7 +17,7 @@ func main() {
 
 	cfg.ParseFlags()
 
-	if cfg.Debug {
+	if cfg.debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
@@ -26,13 +26,13 @@ func main() {
 		log.Fatalf("Error creating producer: %v", err)
 	}
 
-	c, err := newSyncConsumer(cfg)
+	c, err := newSynchronizedConsumer(cfg)
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
 
 	opts := &controller.Options{
-		SyncOnly: cfg.SyncOnly,
+		SyncOnly: cfg.syncOnly,
 	}
 	ctrl := controller.New(p, c, opts)
 	errors := ctrl.Run()
@@ -46,46 +46,46 @@ func main() {
 	ctrl.Wait()
 }
 
-func newSyncConsumer(cfg *MateConfig) (consumers.Consumer, error) {
-	// New returns a Consumer implementation.
+func newSynchronizedConsumer(cfg *mateConfig) (consumers.Consumer, error) {
 	var consumer consumers.Consumer
 	var err error
-	switch cfg.Consumer {
+	switch cfg.consumer {
 	case "google":
-		consumer, err = consumers.NewGoogleDNS(cfg.GoogleZone, cfg.GoogleProject, cfg.GoogleRecordGroupID)
+		consumer, err = consumers.NewGoogleCloudDNSConsumer(cfg.googleZone, cfg.googleProject, cfg.googleRecordGroupID)
 	case "aws":
-		consumer, err = consumers.NewAWSConsumer(cfg.AWSRecordGroupID)
+		consumer, err = consumers.NewAWSRoute53Consumer(cfg.awsRecordGroupID)
 	case "stdout":
-		consumer, err = consumers.NewStdout()
+		consumer, err = consumers.NewStdoutConsumer()
 	default:
-		return nil, fmt.Errorf("Unknown consumer '%s'.", cfg.Consumer)
+		return nil, fmt.Errorf("Unknown consumer '%s'.", cfg.consumer)
 	}
 	if err != nil {
 		return nil, err
 	}
-	return consumers.NewSynced(consumer)
+	return consumers.NewSynchronizedConsumer(consumer)
 }
 
-func newProducer(cfg *MateConfig) (producers.Producer, error) {
-	switch cfg.Producer {
+func newProducer(cfg *mateConfig) (producers.Producer, error) {
+	switch cfg.producer {
 	case "kubernetes":
 		kubeConfig := &producers.KubernetesOptions{
-			Format:    cfg.KubeFormat,
-			APIServer: cfg.KubeServer,
+			Format:         cfg.kubernetesFormat,
+			APIServer:      cfg.kubernetesServer,
+			TrackNodePorts: cfg.kubernetesTrackNodePorts,
 		}
-		return producers.NewKubernetes(kubeConfig)
+		return producers.NewKubernetesProducer(kubeConfig)
 	case "fake":
 		fakeConfig := &producers.FakeProducerOptions{
-			DNSName:       cfg.FakeDNSName,
-			FixedDNSName:  cfg.FakeFixedDNSName,
-			FixedHostname: cfg.FakeFixedHostname,
-			FixedIP:       cfg.FakeFixedIP,
-			Mode:          cfg.FakeMode,
-			TargetDomain:  cfg.FakeTargetDomain,
+			DNSName:       cfg.fakeDNSName,
+			FixedDNSName:  cfg.fakeFixedDNSName,
+			FixedHostname: cfg.fakeFixedHostname,
+			FixedIP:       cfg.fakeFixedIP,
+			Mode:          cfg.fakeMode,
+			TargetDomain:  cfg.fakeTargetDomain,
 		}
-		return producers.NewFake(fakeConfig)
+		return producers.NewFakeProducer(fakeConfig)
 	case "null":
-		return producers.NewNull()
+		return producers.NewNullProducer()
 	}
-	return nil, fmt.Errorf("Unknown producer '%s'.", cfg.Producer)
+	return nil, fmt.Errorf("Unknown producer '%s'.", cfg.producer)
 }

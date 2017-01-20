@@ -15,7 +15,7 @@ type SyncedConsumer struct {
 // one operation at a time, and blocks
 // concurrent operations until the current one
 // finishes.
-func NewSynced(consumer Consumer) (Consumer, error) {
+func NewSynchronizedConsumer(consumer Consumer) (Consumer, error) {
 	return &SyncedConsumer{Consumer: consumer}, nil
 }
 

@@ -32,8 +32,8 @@ type ownedRecord struct {
 	record *dns.ResourceRecordSet
 }
 
-// NewGoogleDNS creates
-func NewGoogleDNS(googleZone, googleProject, googleRecordGroupID string) (Consumer, error) {
+// NewGoogleCloudDNSConsumer creates
+func NewGoogleCloudDNSConsumer(googleZone, googleProject, googleRecordGroupID string) (Consumer, error) {
 	if googleZone == "" {
 		return nil, errors.New("Please provide --google-zone")
 	}

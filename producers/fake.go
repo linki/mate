@@ -42,7 +42,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func NewFake(cfg *FakeProducerOptions) (*fakeProducer, error) {
+func NewFakeProducer(cfg *FakeProducerOptions) (*fakeProducer, error) {
 	if cfg.DNSName == "" {
 		cfg.DNSName = defaultFakeDomain
 	}
@@ -104,16 +104,16 @@ func (a *fakeProducer) generateEndpoint() (*pkg.Endpoint, error) {
 	}
 
 	switch a.mode {
-	case "ip":
+	case ipMode:
 		endpoint.IP = net.IPv4(
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 			byte(randomNumber(1, 255)),
 		).String()
-	case "hostname":
+	case hostnameMode:
 		endpoint.Hostname = fmt.Sprintf("%s.%s", randomString(6), a.targetDomain)
-	case "fixed":
+	case fixedMode:
 		endpoint.DNSName = a.fixedDNSName
 		endpoint.IP = a.fixedIP
 		endpoint.Hostname = a.fixedHostname

@@ -27,7 +27,7 @@ type KubernetesOptions struct {
 	TrackNodePorts bool
 }
 
-func NewKubernetes(cfg *KubernetesOptions) (*kubernetesProducer, error) {
+func NewKubernetesProducer(cfg *KubernetesOptions) (*kubernetesProducer, error) {
 	if cfg.Format == "" {
 		return nil, errors.New("Please provide --kubernetes-format")
 	}
@@ -53,7 +53,7 @@ func NewKubernetes(cfg *KubernetesOptions) (*kubernetesProducer, error) {
 	if cfg.TrackNodePorts {
 		producer.nodePorts, err = NewKubernetesNodePorts(cfg)
 	} else {
-		producer.nodePorts, err = NewNull()
+		producer.nodePorts, err = NewNullProducer()
 	}
 	if err != nil {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)

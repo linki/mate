@@ -33,9 +33,9 @@ const (
 	defaultTxtTTL        = int64(300)
 )
 
-// NewAWSConsumer reates a Consumer instance to sync and process DNS
+// NewAWSRoute53Consumer reates a Consumer instance to sync and process DNS
 // entries in AWS Route53.
-func NewAWSConsumer(awsRecordGroupID string) (Consumer, error) {
+func NewAWSRoute53Consumer(awsRecordGroupID string) (Consumer, error) {
 	if awsRecordGroupID == "" {
 		return nil, errors.New("please provide --aws-record-group-id")
 	}
