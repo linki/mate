@@ -68,7 +68,7 @@ func TestNewFakeReadsConfigurationFromParams(t *testing.T) {
 	fakeParams.Mode = "mode"
 	fakeParams.TargetDomain = "targetDomain"
 
-	producer, err := NewFake(fakeParams)
+	producer, err := NewFakeProducer(fakeParams)
 	if err != nil {
 		t.Fatal(err)
 	}
