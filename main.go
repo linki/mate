@@ -13,9 +13,9 @@ import (
 var version = "Unknown"
 
 func main() {
-	cfg := NewConfig(version)
+	cfg := newConfig(version)
 
-	cfg.ParseFlags()
+	cfg.parseFlags()
 
 	if cfg.debug {
 		log.SetLevel(log.DebugLevel)

@@ -30,12 +30,12 @@ type mateConfig struct {
 	googleRecordGroupID string
 }
 
-func NewConfig(version string) *mateConfig {
+func newConfig(version string) *mateConfig {
 	kingpin.Version(version)
 	return &mateConfig{}
 }
 
-func (cfg *mateConfig) ParseFlags() {
+func (cfg *mateConfig) parseFlags() {
 	kingpin.Flag("producer", "The endpoints producer to use.").Required().StringVar(&cfg.producer)
 	kingpin.Flag("consumer", "The endpoints consumer to use.").Required().StringVar(&cfg.consumer)
 	kingpin.Flag("debug", "Enable debug logging.").BoolVar(&cfg.debug)
@@ -61,6 +61,6 @@ func (cfg *mateConfig) ParseFlags() {
 	kingpin.Parse()
 }
 
-func (cfg *mateConfig) Validate() error {
+func (cfg *mateConfig) validate() error {
 	return nil
 }
