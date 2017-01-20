@@ -1,7 +1,10 @@
-package config
+package main
 
-import kingpin "gopkg.in/alecthomas/kingpin.v2"
-import "net/url"
+import (
+	"net/url"
+
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
+)
 
 type MateConfig struct {
 	Producer string
@@ -27,7 +30,7 @@ type MateConfig struct {
 	GoogleRecordGroupID string
 }
 
-func New(version string) *MateConfig {
+func NewConfig(version string) *MateConfig {
 	kingpin.Version(version)
 	return &MateConfig{}
 }

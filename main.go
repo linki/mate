@@ -5,7 +5,6 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/zalando-incubator/mate/config"
 	"github.com/zalando-incubator/mate/consumers"
 	"github.com/zalando-incubator/mate/controller"
 	"github.com/zalando-incubator/mate/producers"
@@ -14,7 +13,7 @@ import (
 var version = "Unknown"
 
 func main() {
-	cfg := config.New(version)
+	cfg := NewConfig(version)
 
 	cfg.ParseFlags()
 
@@ -47,7 +46,7 @@ func main() {
 	ctrl.Wait()
 }
 
-func newSyncConsumer(cfg *config.MateConfig) (consumers.Consumer, error) {
+func newSyncConsumer(cfg *MateConfig) (consumers.Consumer, error) {
 	// New returns a Consumer implementation.
 	var consumer consumers.Consumer
 	var err error
@@ -67,7 +66,7 @@ func newSyncConsumer(cfg *config.MateConfig) (consumers.Consumer, error) {
 	return consumers.NewSynced(consumer)
 }
 
-func newProducer(cfg *config.MateConfig) (producers.Producer, error) {
+func newProducer(cfg *MateConfig) (producers.Producer, error) {
 	switch cfg.Producer {
 	case "kubernetes":
 		kubeConfig := &producers.KubernetesOptions{

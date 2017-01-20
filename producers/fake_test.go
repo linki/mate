@@ -63,11 +63,12 @@ func TestFakeEndpointsResolveToHostnamesInHostnameMode(t *testing.T) {
 }
 
 func TestNewFakeReadsConfigurationFromParams(t *testing.T) {
-	fakeParams.dnsName = "dnsName"
-	fakeParams.mode = "mode"
-	fakeParams.targetDomain = "targetDomain"
+	fakeParams := &FakeProducerOptions{}
+	fakeParams.DNSName = "dnsName"
+	fakeParams.Mode = "mode"
+	fakeParams.TargetDomain = "targetDomain"
 
-	producer, err := NewFake()
+	producer, err := NewFake(fakeParams)
 	if err != nil {
 		t.Fatal(err)
 	}

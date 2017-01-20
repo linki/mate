@@ -15,6 +15,9 @@ import (
 const (
 	defaultFakeDomain = "example.org."
 	defaultFakeMode   = "ip"
+	ipMode            = "ip"
+	hostnameMode      = "hostname"
+	fixedMode         = "fixed"
 )
 
 type fakeProducer struct {
