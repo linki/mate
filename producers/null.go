@@ -10,7 +10,7 @@ import (
 
 type nullProducer struct{}
 
-func NewNull() (*nullProducer, error) {
+func NewNullProducer() (*nullProducer, error) {
 	return &nullProducer{}, nil
 }
 

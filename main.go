@@ -1,50 +1,38 @@
 package main
 
 import (
+	"fmt"
+
 	log "github.com/Sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/zalando-incubator/mate/consumers"
 	"github.com/zalando-incubator/mate/controller"
 	"github.com/zalando-incubator/mate/producers"
 )
 
-var params struct {
-	producer string
-	consumer string
-	debug    bool
-	syncOnly bool
-}
-
 var version = "Unknown"
 
-func init() {
-	kingpin.Flag("producer", "The endpoints producer to use.").Required().StringVar(&params.producer)
-	kingpin.Flag("consumer", "The endpoints consumer to use.").Required().StringVar(&params.consumer)
-	kingpin.Flag("debug", "Enable debug logging.").BoolVar(&params.debug)
-	kingpin.Flag("sync-only", "Disable event watcher").BoolVar(&params.syncOnly)
-}
-
 func main() {
-	kingpin.Version(version)
-	kingpin.Parse()
+	cfg := newConfig(version)
 
-	if params.debug {
+	cfg.parseFlags()
+
+	if cfg.debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	p, err := producers.New(params.producer)
+	p, err := newProducer(cfg)
 	if err != nil {
 		log.Fatalf("Error creating producer: %v", err)
 	}
 
-	c, err := consumers.NewSynced(params.consumer)
+	c, err := newSynchronizedConsumer(cfg)
 	if err != nil {
 		log.Fatalf("Error creating consumer: %v", err)
 	}
 
 	opts := &controller.Options{
-		SyncOnly: params.syncOnly,
+		SyncOnly: cfg.syncOnly,
 	}
 	ctrl := controller.New(p, c, opts)
 	errors := ctrl.Run()
@@ -56,4 +44,48 @@ func main() {
 	}()
 
 	ctrl.Wait()
+}
+
+func newSynchronizedConsumer(cfg *mateConfig) (consumers.Consumer, error) {
+	var consumer consumers.Consumer
+	var err error
+	switch cfg.consumer {
+	case "google":
+		consumer, err = consumers.NewGoogleCloudDNSConsumer(cfg.googleProject, cfg.googleRecordGroupID)
+	case "aws":
+		consumer, err = consumers.NewAWSRoute53Consumer(cfg.awsRecordGroupID)
+	case "stdout":
+		consumer, err = consumers.NewStdoutConsumer()
+	default:
+		return nil, fmt.Errorf("Unknown consumer '%s'.", cfg.consumer)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return consumers.NewSynchronizedConsumer(consumer)
+}
+
+func newProducer(cfg *mateConfig) (producers.Producer, error) {
+	switch cfg.producer {
+	case "kubernetes":
+		kubeConfig := &producers.KubernetesOptions{
+			Format:         cfg.kubernetesFormat,
+			APIServer:      cfg.kubernetesServer,
+			TrackNodePorts: cfg.kubernetesTrackNodePorts,
+		}
+		return producers.NewKubernetesProducer(kubeConfig)
+	case "fake":
+		fakeConfig := &producers.FakeProducerOptions{
+			DNSName:       cfg.fakeDNSName,
+			FixedDNSName:  cfg.fakeFixedDNSName,
+			FixedHostname: cfg.fakeFixedHostname,
+			FixedIP:       cfg.fakeFixedIP,
+			Mode:          cfg.fakeMode,
+			TargetDomain:  cfg.fakeTargetDomain,
+		}
+		return producers.NewFakeProducer(fakeConfig)
+	case "null":
+		return producers.NewNullProducer()
+	}
+	return nil, fmt.Errorf("Unknown producer '%s'.", cfg.producer)
 }
