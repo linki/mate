@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/alecthomas/kingpin.v2"
-
 	"strings"
 
 	"sync"
@@ -17,11 +15,12 @@ import (
 	awsclient "github.com/zalando-incubator/mate/pkg/aws"
 )
 
+// AWSClient interface
 type AWSClient interface {
 	ListRecordSets(zoneID string) ([]*route53.ResourceRecordSet, error)
 	ChangeRecordSets(upsert, del, create []*route53.ResourceRecordSet, zoneID string) error
-	GetCanonicalZoneIDs(lbDNS []string) (map[string]string, error)
-	GetHostedZones() (map[string]string, error)
+	GetCanonicalZoneIDs(lbDNS []string) (map[string]string, error) //get hosted zone ids for the LBs
+	GetHostedZones() (map[string]string, error)                    //get all route53 hosted zones for the account
 }
 
 type awsConsumer struct {
@@ -34,17 +33,13 @@ const (
 	defaultTxtTTL        = int64(300)
 )
 
-func init() {
-	kingpin.Flag("aws-record-group-id", "Identifier to filter the mate records ").StringVar(&params.awsGroupID)
-}
-
-// NewAWSConsumer reates a Consumer instance to sync and process DNS
+// NewAWSRoute53Consumer reates a Consumer instance to sync and process DNS
 // entries in AWS Route53.
-func NewAWSConsumer() (Consumer, error) {
-	if params.awsGroupID == "" {
+func NewAWSRoute53Consumer(awsRecordGroupID string) (Consumer, error) {
+	if awsRecordGroupID == "" {
 		return nil, errors.New("please provide --aws-record-group-id")
 	}
-	return withClient(awsclient.New(awsclient.Options{}), params.awsGroupID), nil
+	return withClient(awsclient.New(awsclient.Options{}), awsRecordGroupID), nil
 }
 
 func withClient(c AWSClient, groupID string) *awsConsumer {

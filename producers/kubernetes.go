@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/zalando-incubator/mate/pkg"
 )
@@ -16,33 +15,24 @@ const (
 	annotationKey = "zalando.org/dnsname"
 )
 
-var kubernetesParams struct {
-	project string
-	zone    string
-
-	kubeServer     *url.URL
-	format         string
-	trackNodePorts bool
-}
-
 type kubernetesProducer struct {
 	ingress   Producer
 	service   Producer
 	nodePorts Producer
 }
 
-func init() {
-	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&kubernetesParams.kubeServer)
-	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&kubernetesParams.format)
-	kingpin.Flag("kubernetes-track-node-ports", "When true, generates DNS entries for type=NodePort services").BoolVar(&kubernetesParams.trackNodePorts)
+type KubernetesOptions struct {
+	APIServer      *url.URL
+	Format         string
+	TrackNodePorts bool
 }
 
-func NewKubernetes() (*kubernetesProducer, error) {
-	if kubernetesParams.format == "" {
+func NewKubernetesProducer(cfg *KubernetesOptions) (*kubernetesProducer, error) {
+	if cfg.Format == "" {
 		return nil, errors.New("Please provide --kubernetes-format")
 	}
 
-	if kubernetesParams.trackNodePorts {
+	if cfg.TrackNodePorts {
 		log.Infof("Please note, creating DNS entries for NodePort services doesn't currently work in combination with the AWS consumer.")
 	}
 
@@ -50,20 +40,20 @@ func NewKubernetes() (*kubernetesProducer, error) {
 
 	producer := &kubernetesProducer{}
 
-	producer.ingress, err = NewKubernetesIngress()
+	producer.ingress, err = NewKubernetesIngress(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
-	producer.service, err = NewKubernetesService()
+	producer.service, err = NewKubernetesService(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)
 	}
 
-	if kubernetesParams.trackNodePorts {
-		producer.nodePorts, err = NewKubernetesNodePorts()
+	if cfg.TrackNodePorts {
+		producer.nodePorts, err = NewKubernetesNodePorts(cfg)
 	} else {
-		producer.nodePorts, err = NewNull()
+		producer.nodePorts, err = NewNullProducer()
 	}
 	if err != nil {
 		return nil, fmt.Errorf("[Kubernetes] Error creating producer: %v", err)

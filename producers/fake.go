@@ -8,26 +8,17 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/zalando-incubator/mate/pkg"
 )
 
 const (
-	defaultDomain = "example.org."
-	ipMode        = "ip"
-	hostnameMode  = "hostname"
-	fixedMode     = "fixed"
+	defaultFakeDomain = "example.org."
+	defaultFakeMode   = "ip"
+	ipMode            = "ip"
+	hostnameMode      = "hostname"
+	fixedMode         = "fixed"
 )
-
-var fakeParams struct {
-	dnsName       string
-	mode          string
-	targetDomain  string
-	fixedDNSName  string
-	fixedIP       string
-	fixedHostname string
-}
 
 type fakeProducer struct {
 	mode          string
@@ -38,25 +29,34 @@ type fakeProducer struct {
 	fixedHostname string
 }
 
-func init() {
-	kingpin.Flag("fake-dnsname", "The fake DNS name to use.").Default(defaultDomain).StringVar(&fakeParams.dnsName)
-	kingpin.Flag("fake-mode", "The mode to run in.").Default(ipMode).StringVar(&fakeParams.mode)
-	kingpin.Flag("fake-target-domain", "The target domain for hostname mode.").Default(defaultDomain).StringVar(&fakeParams.targetDomain)
-	kingpin.Flag("fake-fixed-dnsname", "The full fake DNS name to use.").StringVar(&fakeParams.fixedDNSName)
-	kingpin.Flag("fake-fixed-ip", "The full fake IP to use.").StringVar(&fakeParams.fixedIP)
-	kingpin.Flag("fake-fixed-hostname", "The full fake host name to use.").StringVar(&fakeParams.fixedHostname)
+type FakeProducerOptions struct {
+	DNSName       string
+	Mode          string
+	TargetDomain  string
+	FixedDNSName  string
+	FixedIP       string
+	FixedHostname string
+}
 
+func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func NewFake() (*fakeProducer, error) {
+func NewFakeProducer(cfg *FakeProducerOptions) (*fakeProducer, error) {
+	if cfg.DNSName == "" {
+		cfg.DNSName = defaultFakeDomain
+	}
+	if cfg.Mode == "" {
+		cfg.Mode = defaultFakeMode
+	}
+
 	return &fakeProducer{
-		mode:          fakeParams.mode,
-		dnsName:       fakeParams.dnsName,
-		targetDomain:  fakeParams.targetDomain,
-		fixedDNSName:  fakeParams.fixedDNSName,
-		fixedIP:       fakeParams.fixedIP,
-		fixedHostname: fakeParams.fixedHostname,
+		mode:          cfg.Mode,
+		dnsName:       cfg.DNSName,
+		targetDomain:  cfg.TargetDomain,
+		fixedDNSName:  cfg.FixedDNSName,
+		fixedIP:       cfg.FixedIP,
+		fixedHostname: cfg.FixedHostname,
 	}, nil
 }
 
