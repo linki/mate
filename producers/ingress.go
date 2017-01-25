@@ -126,17 +126,11 @@ loop:
 }
 
 func validateIngress(ing extensions.Ingress) error {
-	switch {
-	case len(ing.Status.LoadBalancer.Ingress) == 0:
+	if len(ing.Status.LoadBalancer.Ingress) == 0 {
 		return fmt.Errorf(
 			"[Ingress] The load balancer of ingress '%s/%s' does not have any ingress.",
 			ing.Namespace, ing.Name,
 		)
-	case len(ing.Status.LoadBalancer.Ingress) > 1:
-		// TODO(linki): in case we have multiple ingress we can just create multiple A or CNAME records
-		log.Warnf("[Ingress] Ingress '%s/%s' has more than one ingress (%d). Only using the first one.",
-			ing.Namespace, ing.Name, len(ing.Status.LoadBalancer.Ingress))
-		return nil
 	}
 
 	return nil
@@ -146,20 +140,16 @@ func (a *kubernetesIngressProducer) convertIngressToEndpoint(ing extensions.Ingr
 	endpoints := make([]*pkg.Endpoint, 0, len(ing.Spec.Rules))
 
 	for _, rule := range ing.Spec.Rules {
-		ep := &pkg.Endpoint{}
-
 		for _, i := range ing.Status.LoadBalancer.Ingress {
+			ep := &pkg.Endpoint{}
+
 			ep.IP = i.IP
 			ep.Hostname = i.Hostname
 
-			// take the first entry and exit
-			// TODO(linki): we could easily return a list of endpoints
-			break
+			ep.DNSName = pkg.SanitizeDNSName(rule.Host)
+
+			endpoints = append(endpoints, ep)
 		}
-
-		ep.DNSName = pkg.SanitizeDNSName(rule.Host)
-
-		endpoints = append(endpoints, ep)
 	}
 
 	return endpoints

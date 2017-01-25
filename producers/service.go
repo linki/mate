@@ -55,13 +55,13 @@ func (a *kubernetesServiceProducer) Endpoints() ([]*pkg.Endpoint, error) {
 			continue
 		}
 
-		ep, err := a.convertServiceToEndpoint(svc)
+		eps, err := a.convertServiceToEndpoints(svc)
 		if err != nil {
 			log.Error(err)
 			continue
 		}
 
-		endpoints = append(endpoints, ep)
+		endpoints = append(endpoints, eps...)
 	}
 
 	return endpoints, nil
@@ -117,13 +117,15 @@ loop:
 					continue
 				}
 
-				ep, err := a.convertServiceToEndpoint(*svc)
+				eps, err := a.convertServiceToEndpoints(*svc)
 				if err != nil {
 					log.Warnln(err)
 					continue
 				}
 
-				results <- ep
+				for _, ep := range eps {
+					results <- ep
+				}
 			case <-done:
 				log.Info("[Service] Exited monitoring loop.")
 				return
@@ -133,44 +135,40 @@ loop:
 }
 
 func validateService(svc api.Service) error {
-	switch {
-	case len(svc.Status.LoadBalancer.Ingress) == 0:
+	if len(svc.Status.LoadBalancer.Ingress) == 0 {
 		return fmt.Errorf(
 			"[Service] The load balancer of service '%s/%s' does not have any ingress.",
 			svc.Namespace, svc.Name,
 		)
-	case len(svc.Status.LoadBalancer.Ingress) > 1:
-		// TODO(linki): in case we have multiple ingress we can just create multiple A or CNAME records
-		log.Warnf("[Service] Service '%s/%s' has more than one ingress (%d). Only using the first one.",
-			svc.Namespace, svc.Name, len(svc.Status.LoadBalancer.Ingress))
-		return nil
 	}
 
 	return nil
 }
 
-func (a *kubernetesServiceProducer) convertServiceToEndpoint(svc api.Service) (*pkg.Endpoint, error) {
-	ep := &pkg.Endpoint{
-		DNSName: svc.ObjectMeta.Annotations[annotationKey],
-	}
+func (a *kubernetesServiceProducer) convertServiceToEndpoints(svc api.Service) ([]*pkg.Endpoint, error) {
+	dnsName := svc.ObjectMeta.Annotations[annotationKey]
 
-	if ep.DNSName == "" {
+	if dnsName == "" {
 		var buf bytes.Buffer
 		if err := a.tmpl.Execute(&buf, svc); err != nil {
 			return nil, fmt.Errorf("[Service] Error applying template: %s", err)
 		}
 
-		ep.DNSName = pkg.SanitizeDNSName(buf.String())
+		dnsName = pkg.SanitizeDNSName(buf.String())
 	}
 
+	endpoints := make([]*pkg.Endpoint, 0, len(svc.Status.LoadBalancer.Ingress))
+
 	for _, i := range svc.Status.LoadBalancer.Ingress {
+		ep := &pkg.Endpoint{
+			DNSName: dnsName,
+		}
+
 		ep.IP = i.IP
 		ep.Hostname = i.Hostname
 
-		// take the first entry and exit
-		// TODO(linki): we could easily return a list of endpoints
-		break
+		endpoints = append(endpoints, ep)
 	}
 
-	return ep, nil
+	return endpoints, nil
 }
