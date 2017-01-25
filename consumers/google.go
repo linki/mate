@@ -214,6 +214,7 @@ func (d *googleDNSConsumer) applyChange(change *dns.Change) error {
 	changes := make(map[string]*dns.Change)
 	for _, z := range d.zones {
 		if len(additions[z.Name]) == 0 && len(deletions[z.Name]) == 0 {
+			log.Debugf("Didn't submit change for zone %s (no changes)", z.Name)
 			continue
 		}
 
