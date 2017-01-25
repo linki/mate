@@ -229,9 +229,9 @@ func (d *googleDNSConsumer) applyChange(change *dns.Change) error {
 		if err != nil {
 			if strings.Contains(err.Error(), "alreadyExists") {
 				log.Warnf("Cannot update some DNS records (already exist)")
-				return nil
+				continue
 			}
-			return fmt.Errorf("Unable to create change for %s/%s: %v", params.project, z, err)
+			log.Errorf("Unable to create change for %s/%s: %v", params.project, z, err)
 		}
 	}
 
