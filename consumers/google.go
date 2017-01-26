@@ -21,10 +21,10 @@ const (
 
 type googleDNSConsumer struct {
 	client  *dns.Service
+	zones   map[string]*dns.ManagedZone
 	labels  []string
 	groupID string
 	project string
-	zone    string
 }
 
 type ownedRecord struct {
@@ -33,11 +33,7 @@ type ownedRecord struct {
 }
 
 // NewGoogleCloudDNSConsumer creates
-func NewGoogleCloudDNSConsumer(googleZone, googleProject, googleRecordGroupID string) (Consumer, error) {
-	if googleZone == "" {
-		return nil, errors.New("Please provide --google-zone")
-	}
-
+func NewGoogleCloudDNSConsumer(googleProject, googleRecordGroupID string) (Consumer, error) {
 	if googleProject == "" {
 		return nil, errors.New("Please provide --google-project")
 	}
@@ -45,11 +41,6 @@ func NewGoogleCloudDNSConsumer(googleZone, googleProject, googleRecordGroupID st
 	if googleRecordGroupID == "" {
 		return nil, errors.New("Please provide --google-record-group-id")
 	}
-
-	// if params.zone == "" {
-	// 	params.zone = strings.Replace(params.domain, ".", "-", -1)
-	// 	log.Infof("No --zone provided, inferring from domain: '%s'.", params.zone)
-	// }
 
 	gcloud, err := google.DefaultClient(context.Background(), dns.NdevClouddnsReadwriteScope)
 	if err != nil {
@@ -61,14 +52,24 @@ func NewGoogleCloudDNSConsumer(googleZone, googleProject, googleRecordGroupID st
 		return nil, fmt.Errorf("Error creating DNS service: %v", err)
 	}
 
+	resp, err := client.ManagedZones.List(googleProject).Do()
+	if err != nil {
+		return nil, fmt.Errorf("Error getting managed zones in project %s: %v", googleProject, err)
+	}
+
+	zones := make(map[string]*dns.ManagedZone)
+	for _, z := range resp.ManagedZones {
+		zones[z.DnsName] = z
+	}
+
 	labels := []string{heritageLabel, labelPrefix + googleRecordGroupID}
 
 	return &googleDNSConsumer{
 		client:  client,
+		zones:   zones,
 		labels:  labels,
 		groupID: googleRecordGroupID,
 		project: googleProject,
-		zone:    googleZone,
 	}, nil
 }
 
@@ -131,7 +132,7 @@ func (d *googleDNSConsumer) Sync(endpoints []*pkg.Endpoint) error {
 
 	err = d.applyChange(change)
 	if err != nil {
-		return fmt.Errorf("Error applying change for %s/%s: %v", d.project, d.zone, err)
+		return fmt.Errorf("Error applying change for project %s: %v", d.project, err)
 	}
 
 	return nil
@@ -184,7 +185,7 @@ func (d *googleDNSConsumer) Process(endpoint *pkg.Endpoint) error {
 
 	err := d.applyChange(change)
 	if err != nil {
-		return fmt.Errorf("Error applying change for %s/%s: %v", d.project, d.zone, err)
+		return fmt.Errorf("Error applying change for project %s: %v", d.project, err)
 	}
 
 	return nil
@@ -196,27 +197,60 @@ func (d *googleDNSConsumer) applyChange(change *dns.Change) error {
 		return nil
 	}
 
-	_, err := d.client.Changes.Create(d.project, d.zone, change).Do()
-	if err != nil {
-		if strings.Contains(err.Error(), "alreadyExists") {
-			log.Warnf("Cannot update some DNS records (already exist)")
-			return nil
+	additions := make(map[string][]*dns.ResourceRecordSet)
+	deletions := make(map[string][]*dns.ResourceRecordSet)
+
+	for _, add := range change.Additions {
+		hostedZone := d.hostedZoneFor(add.Name)
+		additions[hostedZone] = append(additions[hostedZone], add)
+	}
+	for _, del := range change.Deletions {
+		hostedZone := d.hostedZoneFor(del.Name)
+		deletions[hostedZone] = append(deletions[hostedZone], del)
+	}
+
+	changes := make(map[string]*dns.Change)
+	for _, z := range d.zones {
+		if len(additions[z.Name]) == 0 && len(deletions[z.Name]) == 0 {
+			log.Debugf("Didn't submit change for zone %s (no changes)", z.Name)
+			continue
 		}
-		return fmt.Errorf("Unable to create change for %s/%s: %v", d.project, d.zone, err)
+
+		changes[z.Name] = &dns.Change{
+			Additions: additions[z.Name],
+			Deletions: deletions[z.Name],
+		}
+	}
+
+	for z, c := range changes {
+		_, err := d.client.Changes.Create(d.project, z, c).Do()
+		if err != nil {
+			if strings.Contains(err.Error(), "alreadyExists") {
+				log.Warnf("Cannot update some DNS records (already exist)")
+				continue
+			}
+			log.Errorf("Unable to create change for %s/%s: %v", d.project, z, err)
+		}
 	}
 
 	return nil
 }
 
 func (d *googleDNSConsumer) currentRecords() (map[string]*ownedRecord, error) {
-	resp, err := d.client.ResourceRecordSets.List(d.project, d.zone).Do()
-	if err != nil {
-		return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", d.project, d.zone, err)
+	aggregatedRecords := make([]*dns.ResourceRecordSet, 0)
+
+	for z := range d.zones {
+		resp, err := d.client.ResourceRecordSets.List(d.project, z).Do()
+		if err != nil {
+			return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", d.project, z, err)
+		}
+
+		aggregatedRecords = append(aggregatedRecords, resp.Rrsets...)
 	}
 
 	records := make(map[string]*ownedRecord)
 
-	for _, r := range resp.Rrsets {
+	for _, r := range aggregatedRecords {
 		if r.Type == "A" || r.Type == "TXT" {
 			record, exists := records[r.Name]
 
@@ -244,6 +278,18 @@ func (d *googleDNSConsumer) printRecords(records map[string]*ownedRecord) {
 			log.Debugln(" ", r.record.Name, r.record.Type, r.record.Rrdatas)
 		}
 	}
+}
+
+func (d *googleDNSConsumer) hostedZoneFor(name string) string {
+	var matchName string
+	var matchID string
+	for zoneName, zone := range d.zones {
+		if strings.HasSuffix(name, zoneName) && len(zoneName) > len(matchName) { //get the longest match for the dns name
+			matchName = zoneName
+			matchID = zone.Name
+		}
+	}
+	return matchID
 }
 
 func (d *googleDNSConsumer) isResponsible(record *dns.ResourceRecordSet) bool {

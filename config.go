@@ -26,7 +26,6 @@ type mateConfig struct {
 	awsRecordGroupID string
 
 	googleProject       string
-	googleZone          string
 	googleRecordGroupID string
 }
 
@@ -55,7 +54,6 @@ func (cfg *mateConfig) parseFlags() {
 	kingpin.Flag("aws-record-group-id", "Identifier to filter mate created records ").StringVar(&cfg.awsRecordGroupID)
 
 	kingpin.Flag("google-project", "Project ID that manages the zone").StringVar(&cfg.googleProject)
-	kingpin.Flag("google-zone", "Name of the zone to manage.").StringVar(&cfg.googleZone)
 	kingpin.Flag("google-record-group-id", "Name of the zone to manage.").StringVar(&cfg.googleRecordGroupID)
 
 	kingpin.Parse()

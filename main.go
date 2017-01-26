@@ -51,7 +51,7 @@ func newSynchronizedConsumer(cfg *mateConfig) (consumers.Consumer, error) {
 	var err error
 	switch cfg.consumer {
 	case "google":
-		consumer, err = consumers.NewGoogleCloudDNSConsumer(cfg.googleZone, cfg.googleProject, cfg.googleRecordGroupID)
+		consumer, err = consumers.NewGoogleCloudDNSConsumer(cfg.googleProject, cfg.googleRecordGroupID)
 	case "aws":
 		consumer, err = consumers.NewAWSRoute53Consumer(cfg.awsRecordGroupID)
 	case "stdout":
