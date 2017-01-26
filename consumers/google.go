@@ -239,10 +239,10 @@ func (d *googleDNSConsumer) applyChange(change *dns.Change) error {
 func (d *googleDNSConsumer) currentRecords() (map[string]*ownedRecord, error) {
 	aggregatedRecords := make([]*dns.ResourceRecordSet, 0)
 
-	for z := range d.zones {
-		resp, err := d.client.ResourceRecordSets.List(d.project, z).Do()
+	for _, z := range d.zones {
+		resp, err := d.client.ResourceRecordSets.List(d.project, z.Name).Do()
 		if err != nil {
-			return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", d.project, z, err)
+			return nil, fmt.Errorf("Error getting DNS records from %s/%s: %v", d.project, z.Name, err)
 		}
 
 		aggregatedRecords = append(aggregatedRecords, resp.Rrsets...)
