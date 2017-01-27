@@ -108,6 +108,12 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 		if !exist { //record does not exist, create it
 			newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
 			upsert = append(upsert, newAliasRecord, newTXTRecord)
+			//update the existing map so another record with same DNS name won't be included in upsert transaction
+			//note that it is compatible with record removal logic below
+			recordInfoMap[aws.StringValue(newAliasRecord.Name)] = &pkg.RecordInfo{
+				Target:  aws.StringValue(newAliasRecord.AliasTarget.DNSName),
+				GroupID: a.getGroupID(),
+			}
 			continue
 		}
 
@@ -116,10 +122,31 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 			continue
 		}
 
-		// make sure record only updated when target changes, not to spam AWS route53 API with dummy updates
-		if pkg.SanitizeDNSName(existingRecordInfo.Target) != aws.StringValue(newAliasRecord.AliasTarget.DNSName) {
-			newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
-			upsert = append(upsert, newAliasRecord, newTXTRecord)
+		//there exists a record in AWS Route53 with same DNS name and group id, but need to make sure that
+		//among other services/ingress resources sharing same dns name none
+		//are already registered with DNS provider
+		currentlyRegisteredLB := existingRecordInfo.Target
+		lbStillEnabled := false
+		for _, checkRecord := range newAliasRecords {
+			lbStillEnabled = lbStillEnabled ||
+				pkg.SanitizeDNSName(aws.StringValue(checkRecord.AliasTarget.DNSName)) ==
+					pkg.SanitizeDNSName(currentlyRegisteredLB) &&
+					pkg.SanitizeDNSName(aws.StringValue(checkRecord.Name)) ==
+						pkg.SanitizeDNSName(aws.StringValue(newAliasRecord.Name))
+		}
+
+		if !lbStillEnabled {
+			//check another record not already scheduled for upsert
+			skip := false
+			for _, upserted := range upsert {
+				if pkg.SanitizeDNSName(aws.StringValue(upserted.Name)) == pkg.SanitizeDNSName(aws.StringValue(newAliasRecord.Name)) {
+					skip = true
+				}
+			}
+			if !skip {
+				newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
+				upsert = append(upsert, newAliasRecord, newTXTRecord)
+			}
 		}
 	}
 

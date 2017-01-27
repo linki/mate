@@ -366,6 +366,150 @@ func testAWSConsumer(t *testing.T, ti awsTestItem) {
 func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias works
 	for _, ti := range []awsTestItem{
 		{
+			msg: "two new fighting services",
+			sync: []*pkg.Endpoint{
+				{
+					"test.example.com", "", "301.elb.com",
+				},
+				{
+					"test.example.com", "", "401.elb.com",
+				},
+				{
+					"update.example.com", "", "elb.com",
+				},
+				{
+					"withouttxt.example.com", "", "random.com",
+				},
+				{
+					"nest.sub.example.com", "", "nested.elb",
+				},
+			},
+			expectUpsert: map[string][]*route53.ResourceRecordSet{
+				"sub.example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("nest.sub.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("nested.elb"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("nest.sub.example.com."),
+					},
+				},
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("test.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("301.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("test.example.com."),
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.example.com."),
+					},
+				},
+			},
+			expectDelete: map[string][]*route53.ResourceRecordSet{
+				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.foo.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("404.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.foo.com."),
+					},
+				},
+			},
+		},
+		{
+			msg: "two fighting services, one old, one new",
+			sync: []*pkg.Endpoint{
+				{
+					"test.example.com", "", "302.elb.com",
+				},
+				{
+					"test.example.com", "", "404.elb.com",
+				},
+				{
+					"update.example.com", "", "elb.com",
+				},
+				{
+					"withouttxt.example.com", "", "random.com",
+				},
+				{
+					"nest.sub.example.com", "", "nested.elb",
+				},
+			},
+			expectUpsert: map[string][]*route53.ResourceRecordSet{
+				"sub.example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("nest.sub.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("nested.elb"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("nest.sub.example.com."),
+					},
+				},
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.example.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.example.com."),
+					},
+				},
+			},
+			expectDelete: map[string][]*route53.ResourceRecordSet{
+				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("update.foo.com."),
+						AliasTarget: &route53.AliasTarget{
+							DNSName:      aws.String("404.elb.com"),
+							HostedZoneId: aws.String("123"),
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("update.foo.com."),
+					},
+				},
+			},
+		},
+		{
 			msg: "partial overlap",
 			sync: []*pkg.Endpoint{
 				{
