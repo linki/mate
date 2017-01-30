@@ -17,7 +17,12 @@ type Endpoint struct {
 	Hostname string
 }
 
-//SanitizeDNSName return the DNS with a trailing dot
+// SanitizeDNSName return the DNS with a trailing dot
 func SanitizeDNSName(dns string) string {
 	return strings.Trim(dns, ".") + "."
+}
+
+// SameDNSName compares two santized dns values
+func SameDNSName(dnsX, dnsY string) bool {
+	return SanitizeDNSName(dnsX) == SanitizeDNSName(dnsY)
 }

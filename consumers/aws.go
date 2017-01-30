@@ -103,17 +103,23 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 
 	//find records to be upserted
 	for _, newAliasRecord := range newAliasRecords {
+		//make sure that another reocrd with same DNS name is not already included into upsert slice
+		skip := false
+		for _, upserted := range upsert {
+			if pkg.SameDNSName(aws.StringValue(upserted.Name), aws.StringValue(newAliasRecord.Name)) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
 		existingRecordInfo, exist := recordInfoMap[aws.StringValue(newAliasRecord.Name)]
 
 		if !exist { //record does not exist, create it
 			newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
 			upsert = append(upsert, newAliasRecord, newTXTRecord)
-			//update the existing map so another record with same DNS name won't be included in upsert transaction
-			//note that it is compatible with record removal logic below
-			recordInfoMap[aws.StringValue(newAliasRecord.Name)] = &pkg.RecordInfo{
-				Target:  aws.StringValue(newAliasRecord.AliasTarget.DNSName),
-				GroupID: a.getGroupID(),
-			}
 			continue
 		}
 
@@ -124,29 +130,20 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 
 		//there exists a record in AWS Route53 with same DNS name and group id, but need to make sure that
 		//among other services/ingress resources sharing same dns name none
-		//are already registered with DNS provider
+		//are already registered with DNS provider - this checked via LB value
 		currentlyRegisteredLB := existingRecordInfo.Target
-		lbStillEnabled := false
+		lbStillRequired := false
 		for _, checkRecord := range newAliasRecords {
-			lbStillEnabled = lbStillEnabled ||
-				pkg.SanitizeDNSName(aws.StringValue(checkRecord.AliasTarget.DNSName)) ==
-					pkg.SanitizeDNSName(currentlyRegisteredLB) &&
-					pkg.SanitizeDNSName(aws.StringValue(checkRecord.Name)) ==
-						pkg.SanitizeDNSName(aws.StringValue(newAliasRecord.Name))
+			if pkg.SameDNSName(aws.StringValue(checkRecord.AliasTarget.DNSName), currentlyRegisteredLB) &&
+				pkg.SameDNSName(aws.StringValue(checkRecord.Name), aws.StringValue(newAliasRecord.Name)) {
+				lbStillRequired = true
+				break
+			}
 		}
 
-		if !lbStillEnabled {
-			//check another record not already scheduled for upsert
-			skip := false
-			for _, upserted := range upsert {
-				if pkg.SanitizeDNSName(aws.StringValue(upserted.Name)) == pkg.SanitizeDNSName(aws.StringValue(newAliasRecord.Name)) {
-					skip = true
-				}
-			}
-			if !skip {
-				newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
-				upsert = append(upsert, newAliasRecord, newTXTRecord)
-			}
+		if !lbStillRequired {
+			newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
+			upsert = append(upsert, newAliasRecord, newTXTRecord)
 		}
 	}
 
