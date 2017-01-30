@@ -17,6 +17,10 @@ func main() {
 
 	cfg.parseFlags()
 
+	if err := cfg.validate(); err != nil {
+		log.Fatalf("Misconfiguration error: %v", err)
+	}
+
 	if cfg.debug {
 		log.SetLevel(log.DebugLevel)
 	}

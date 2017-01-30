@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/url"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
@@ -60,5 +61,11 @@ func (cfg *mateConfig) parseFlags() {
 }
 
 func (cfg *mateConfig) validate() error {
+	if cfg.consumer == "aws" && cfg.awsRecordGroupID == "" {
+		return errors.New("Missing aws record group id flag")
+	}
+	if cfg.consumer == "google" && cfg.googleRecordGroupID == "" {
+		return errors.New("Missing google record group id flag")
+	}
 	return nil
 }
