@@ -139,7 +139,7 @@ func TestRecordInfo(t *testing.T) {
 		if val.GroupID != client.getGroupID() {
 			t.Errorf("Incorrect record info for %v", records)
 		}
-		if !sameTargets("abc.def.ghi", val.Target) {
+		if !sameTargets("abc.def.ghi.", val.Target) {
 			t.Errorf("Incorrect record info for %v", records)
 		}
 	}
@@ -215,7 +215,7 @@ func TestRecordInfo(t *testing.T) {
 		if val.GroupID != client.getGroupID() {
 			t.Errorf("Incorrect record info for %v", records)
 		}
-		if !sameTargets("abc.def.ghi", val.Target) {
+		if !sameTargets("abc.def.ghi.", val.Target) {
 			t.Errorf("Incorrect record info for %v", records)
 		}
 	}
@@ -225,7 +225,7 @@ func TestRecordInfo(t *testing.T) {
 		if val.GroupID != "mate:new-group-id" {
 			t.Errorf("Incorrect record info for %v", records)
 		}
-		if !sameTargets("elb.com", val.Target) {
+		if !sameTargets("elb.com.", val.Target) {
 			t.Errorf("Incorrect record info for %v", records)
 		}
 	}

@@ -50,7 +50,7 @@ func withClient(c AWSClient, groupID string) *awsConsumer {
 }
 
 func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
-	newAliasRecords, err := a.endpointsToAlias(endpoints)
+	kubeRecords, err := a.endpointsToAlias(endpoints)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	}
 
 	inputByZoneID := map[string][]*route53.ResourceRecordSet{}
-	for _, record := range newAliasRecords {
+	for _, record := range kubeRecords {
 		zoneID := getZoneIDForEndpoint(hostedZonesMap, record) //this guarantees that the endpoint will not be created in multiple hosted zones
 		if zoneID == "" {
 			log.Warnf("Hosted zone for endpoint: %s is not found. Skipping record...", aws.StringValue(record.Name))
@@ -91,7 +91,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	return nil
 }
 
-func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecordSet, zoneID string) error {
+func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet, zoneID string) error {
 	existingRecords, err := a.client.ListRecordSets(zoneID)
 	if err != nil {
 		return err
@@ -100,50 +100,46 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 	recordInfoMap := a.recordInfo(existingRecords)
 
 	var upsert, del []*route53.ResourceRecordSet
-
+	upsertedMap := make(map[string]bool) // keep track of records to be upserted
+	targetMap := map[string][]*string{}  // map dnsname -> list of targets
+	for _, kr := range kubeRecords {
+		targetMap[aws.StringValue(kr.Name)] = append(targetMap[aws.StringValue(kr.Name)], kr.AliasTarget.DNSName)
+	}
 	//find records to be upserted
-	for _, newAliasRecord := range newAliasRecords {
-		//make sure that another reocrd with same DNS name is not already included into upsert slice
-		skip := false
-		for _, upserted := range upsert {
-			if pkg.SameDNSName(aws.StringValue(upserted.Name), aws.StringValue(newAliasRecord.Name)) {
-				skip = true
-				break
-			}
-		}
-		if skip {
+	for _, kubeRecord := range kubeRecords {
+		//make sure that another record with same DNS name is not already included into upsert slice
+		if _, upserted := upsertedMap[aws.StringValue(kubeRecord.Name)]; upserted {
 			continue
 		}
 
-		existingRecordInfo, exist := recordInfoMap[aws.StringValue(newAliasRecord.Name)]
+		existingRecordInfo, exist := recordInfoMap[aws.StringValue(kubeRecord.Name)]
 
 		if !exist { //record does not exist, create it
-			newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
-			upsert = append(upsert, newAliasRecord, newTXTRecord)
+			newTXTRecord := a.getAssignedTXTRecordObject(kubeRecord)
+			upsert = append(upsert, kubeRecord, newTXTRecord)
+			upsertedMap[aws.StringValue(kubeRecord.Name)] = true
 			continue
 		}
 
 		if existingRecordInfo.GroupID != a.getGroupID() { // there exist a record with a different or empty group ID
-			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(newAliasRecord.Name), existingRecordInfo.GroupID)
+			log.Warnf("Skipping record %s: with a group ID: %s", aws.StringValue(kubeRecord.Name), existingRecordInfo.GroupID)
 			continue
 		}
 
 		//there exists a record in AWS Route53 with same DNS name and group id, but need to make sure that
-		//among other services/ingress resources sharing same dns name none
-		//are already registered with DNS provider - this checked via LB value
-		currentlyRegisteredLB := existingRecordInfo.Target
-		lbStillRequired := false
-		for _, checkRecord := range newAliasRecords {
-			if pkg.SameDNSName(aws.StringValue(checkRecord.AliasTarget.DNSName), currentlyRegisteredLB) &&
-				pkg.SameDNSName(aws.StringValue(checkRecord.Name), aws.StringValue(newAliasRecord.Name)) {
-				lbStillRequired = true
+		//the alias load balancer is no longer used
+		kubeTargetsForDNS := targetMap[aws.StringValue(kubeRecord.Name)]
+		targetStillRequired := false
+		for _, targetPtr := range kubeTargetsForDNS {
+			if aws.StringValue(targetPtr) == existingRecordInfo.Target {
+				targetStillRequired = true
 				break
 			}
 		}
-
-		if !lbStillRequired {
-			newTXTRecord := a.getAssignedTXTRecordObject(newAliasRecord)
-			upsert = append(upsert, newAliasRecord, newTXTRecord)
+		if !targetStillRequired { //target is no longer required - overwrite it
+			newTXTRecord := a.getAssignedTXTRecordObject(kubeRecord)
+			upsert = append(upsert, kubeRecord, newTXTRecord)
+			upsertedMap[aws.StringValue(kubeRecord.Name)] = true
 		}
 	}
 
@@ -152,8 +148,8 @@ func (a *awsConsumer) syncPerHostedZone(newAliasRecords []*route53.ResourceRecor
 		recordInfo := recordInfoMap[aws.StringValue(existingRecord.Name)]
 		if recordInfo.GroupID == a.getGroupID() {
 			remove := true
-			for _, newAliasRecord := range newAliasRecords {
-				if aws.StringValue(newAliasRecord.Name) == aws.StringValue(existingRecord.Name) {
+			for _, kubeRecord := range kubeRecords {
+				if aws.StringValue(kubeRecord.Name) == aws.StringValue(existingRecord.Name) {
 					remove = false
 				}
 			}
@@ -283,7 +279,7 @@ func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[strin
 			}
 		}
 		if aws.StringValue(record.Type) != "TXT" {
-			infoMap[aws.StringValue(record.Name)].Target = a.getRecordTarget(record)
+			infoMap[aws.StringValue(record.Name)].Target = pkg.SanitizeDNSName(a.getRecordTarget(record))
 		}
 	}
 
