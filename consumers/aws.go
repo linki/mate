@@ -131,7 +131,7 @@ func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet
 		kubeTargetsForDNS := targetMap[aws.StringValue(kubeRecord.Name)]
 		targetStillRequired := false
 		for _, targetPtr := range kubeTargetsForDNS {
-			if aws.StringValue(targetPtr) == existingRecordInfo.Target {
+			if pkg.SameDNSName(aws.StringValue(targetPtr), existingRecordInfo.Target) {
 				targetStillRequired = true
 				break
 			}
@@ -149,7 +149,7 @@ func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet
 		if recordInfo.GroupID == a.getGroupID() {
 			remove := true
 			for _, kubeRecord := range kubeRecords {
-				if aws.StringValue(kubeRecord.Name) == aws.StringValue(existingRecord.Name) {
+				if pkg.SameDNSName(aws.StringValue(kubeRecord.Name), aws.StringValue(existingRecord.Name)) {
 					remove = false
 				}
 			}
