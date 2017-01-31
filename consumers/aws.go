@@ -186,6 +186,9 @@ func (a *awsConsumer) Process(endpoint *pkg.Endpoint) error {
 	if err != nil {
 		return err
 	}
+	if len(aliasRecords) < 1 {
+		return fmt.Errorf("Failed to process endpoint. Alias could not be constructed for: %s.", endpoint.DNSName)
+	}
 
 	create := []*route53.ResourceRecordSet{aliasRecords[0], a.getAssignedTXTRecordObject(aliasRecords[0])}
 
