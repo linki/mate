@@ -20,6 +20,7 @@ import (
 type kubernetesServiceProducer struct {
 	client *k8s.Clientset
 	tmpl   *template.Template
+	filter map[string]string
 }
 
 func NewKubernetesService(cfg *KubernetesOptions) (*kubernetesServiceProducer, error) {
@@ -38,6 +39,7 @@ func NewKubernetesService(cfg *KubernetesOptions) (*kubernetesServiceProducer, e
 	return &kubernetesServiceProducer{
 		client: client,
 		tmpl:   tmpl,
+		filter: cfg.Filter,
 	}, nil
 }
 
@@ -50,7 +52,7 @@ func (a *kubernetesServiceProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	endpoints := make([]*pkg.Endpoint, 0)
 
 	for _, svc := range allServices.Items {
-		if err := validateService(svc); err != nil {
+		if err := validateService(svc, a.filter); err != nil {
 			log.Warnln(err)
 			continue
 		}
@@ -112,7 +114,7 @@ loop:
 
 				log.Printf("%s: %s/%s", event.Type, svc.Namespace, svc.Name)
 
-				if err := validateService(*svc); err != nil {
+				if err := validateService(*svc, a.filter); err != nil {
 					log.Warnln(err)
 					continue
 				}
@@ -132,7 +134,16 @@ loop:
 	}
 }
 
-func validateService(svc api.Service) error {
+func validateService(svc api.Service, filter map[string]string) error {
+	for key := range filter {
+		if svc.Annotations[key] != filter[key] {
+			return fmt.Errorf(
+				"[Service] Service '%s/%s' doesn't match filter for annotation %s: %s != %s",
+				svc.Namespace, svc.Name, key, filter[key], svc.Annotations[key],
+			)
+		}
+	}
+
 	switch {
 	case len(svc.Status.LoadBalancer.Ingress) == 0:
 		return fmt.Errorf(

@@ -76,6 +76,7 @@ func newProducer(cfg *mateConfig) (producers.Producer, error) {
 			Format:         cfg.kubernetesFormat,
 			APIServer:      cfg.kubernetesServer,
 			TrackNodePorts: cfg.kubernetesTrackNodePorts,
+			Filter:         cfg.kubernetesFilter,
 		}
 		return producers.NewKubernetesProducer(kubeConfig)
 	case "fake":

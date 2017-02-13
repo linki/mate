@@ -20,6 +20,7 @@ import (
 type kubernetesIngressProducer struct {
 	client *k8s.Clientset
 	tmpl   *template.Template
+	filter map[string]string
 }
 
 func NewKubernetesIngress(cfg *KubernetesOptions) (*kubernetesIngressProducer, error) {
@@ -38,6 +39,7 @@ func NewKubernetesIngress(cfg *KubernetesOptions) (*kubernetesIngressProducer, e
 	return &kubernetesIngressProducer{
 		client: client,
 		tmpl:   tmpl,
+		filter: cfg.Filter,
 	}, nil
 }
 
@@ -50,7 +52,7 @@ func (a *kubernetesIngressProducer) Endpoints() ([]*pkg.Endpoint, error) {
 	endpoints := make([]*pkg.Endpoint, 0)
 
 	for _, ing := range allIngress.Items {
-		if err := validateIngress(ing); err != nil {
+		if err := validateIngress(ing, a.filter); err != nil {
 			log.Warnln(err)
 			continue
 		}
@@ -107,7 +109,7 @@ loop:
 
 				log.Printf("%s: %s/%s", event.Type, ing.Namespace, ing.Name)
 
-				if err := validateIngress(*ing); err != nil {
+				if err := validateIngress(*ing, a.filter); err != nil {
 					log.Warnln(err)
 					continue
 				}
@@ -125,7 +127,16 @@ loop:
 	}
 }
 
-func validateIngress(ing extensions.Ingress) error {
+func validateIngress(ing extensions.Ingress, filter map[string]string) error {
+	for key := range filter {
+		if ing.Annotations[key] != filter[key] {
+			return fmt.Errorf(
+				"[Ingress] Ingress '%s/%s' doesn't match filter for annotation %s: %s != %s",
+				ing.Namespace, ing.Name, key, filter[key], ing.Annotations[key],
+			)
+		}
+	}
+
 	switch {
 	case len(ing.Status.LoadBalancer.Ingress) == 0:
 		return fmt.Errorf(

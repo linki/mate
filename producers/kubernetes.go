@@ -25,6 +25,7 @@ type KubernetesOptions struct {
 	APIServer      *url.URL
 	Format         string
 	TrackNodePorts bool
+	Filter         map[string]string
 }
 
 func NewKubernetesProducer(cfg *KubernetesOptions) (*kubernetesProducer, error) {
