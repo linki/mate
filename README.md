@@ -3,9 +3,9 @@
 [![Coverage Status](https://coveralls.io/repos/github/zalando-incubator/mate/badge.svg?branch=master)](https://coveralls.io/github/zalando-incubator/mate?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/zalando-incubator/mate)](https://goreportcard.com/report/github.com/zalando-incubator/mate)
 
-# !!! Update !!! 
+# Status
 
-Mate will be merged into new External DNS project - https://github.com/kubernetes-incubator/external-dns, which is meant to be compatible with Mate annotations and become a standard way of creating DNS records for K8S. 
+Mate will be merged into new External DNS project - https://github.com/kubernetes-incubator/external-dns, which is meant to be compatible with Mate annotations and become a standard way of creating DNS records for Kubernetes. 
 
 This project is no longer actively developed in the view of External DNS and only minor bug fixes will be considered.  
 
