@@ -23,6 +23,7 @@ type mateConfig struct {
 	kubernetesServer         *url.URL
 	kubernetesFormat         string
 	kubernetesTrackNodePorts bool
+	kubernetesFilter         map[string]string
 
 	awsRecordGroupID string
 
@@ -32,7 +33,7 @@ type mateConfig struct {
 
 func newConfig(version string) *mateConfig {
 	kingpin.Version(version)
-	return &mateConfig{}
+	return &mateConfig{kubernetesFilter: map[string]string{}}
 }
 
 func (cfg *mateConfig) parseFlags() {
@@ -51,6 +52,7 @@ func (cfg *mateConfig) parseFlags() {
 	kingpin.Flag("kubernetes-server", "The address of the Kubernetes API server.").URLVar(&cfg.kubernetesServer)
 	kingpin.Flag("kubernetes-format", "Format of DNS entries, e.g. {{.Name}}-{{.Namespace}}.example.com").StringVar(&cfg.kubernetesFormat)
 	kingpin.Flag("kubernetes-track-node-ports", "When true, generates DNS entries for type=NodePort services").BoolVar(&cfg.kubernetesTrackNodePorts)
+	kingpin.Flag("kubernetes-filter", "A set of annotations that must match in order to process the object.").StringMapVar(&cfg.kubernetesFilter)
 
 	kingpin.Flag("aws-record-group-id", "Identifier to filter mate created records ").StringVar(&cfg.awsRecordGroupID)
 
