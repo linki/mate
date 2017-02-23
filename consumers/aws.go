@@ -300,7 +300,7 @@ func (a *awsConsumer) getRecordTarget(r *route53.ResourceRecordSet) string {
 	return aws.StringValue(r.ResourceRecords[0].Value)
 }
 
-//endpointsToRecords converts pkg Endpoint to route53 Alias Records
+//endpointsToRecords converts pkg Endpoint to route53 A [Alias] Records depending whether IP/LB Hostname is used
 func (a *awsConsumer) endpointsToRecords(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
 	lbDNS := make([]string, 0)
 	for i := range endpoints {
@@ -324,7 +324,8 @@ func (a *awsConsumer) endpointsToRecords(endpoints []*pkg.Endpoint) ([]*route53.
 	return rset, nil
 }
 
-//endpointToRecord convert endpoint to an AWS A [Alias] record depending whether IP of ELB hostname is used
+//endpointToRecord convert endpoint to an AWS A [Alias] record depending whether IP of LB hostname is used
+//if both are specified hostname takes precedence and Alias record is to be created
 func (a *awsConsumer) endpointToRecord(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),

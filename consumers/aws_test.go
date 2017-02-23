@@ -27,17 +27,40 @@ func TestEndpointToAlias(t *testing.T) {
 	client := &awsConsumer{
 		groupID: groupID,
 	}
+	//both Hostname and IP specified -> Alias Record
 	ep := &pkg.Endpoint{
 		DNSName:  "example.com",
 		IP:       "10.202.10.123",
 		Hostname: "amazon.elb.com",
 	}
-	rsA := client.endpointToAlias(ep, &zoneID)
+	rsA := client.endpointToRecord(ep, &zoneID)
 	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
 		*rsA.AliasTarget.DNSName != pkg.SanitizeDNSName(ep.Hostname) ||
 		*rsA.AliasTarget.HostedZoneId != zoneID {
+		t.Error("Should create an Alias A record")
+	}
+	// only IP specified -> plain A Record
+	ep = &pkg.Endpoint{
+		DNSName: "example.com",
+		IP:      "10.202.10.123",
+	}
+	rsA = client.endpointToRecord(ep, &zoneID)
+	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
+		len(rsA.ResourceRecords) != 1 || *rsA.ResourceRecords[0].Value != ep.IP {
 		t.Error("Should create an A record")
 	}
+	//only Hostname specified -> Alias Record
+	ep = &pkg.Endpoint{
+		DNSName:  "example.com",
+		Hostname: "amazon.elb.com",
+	}
+	rsA = client.endpointToRecord(ep, &zoneID)
+	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
+		*rsA.AliasTarget.DNSName != pkg.SanitizeDNSName(ep.Hostname) ||
+		*rsA.AliasTarget.HostedZoneId != zoneID {
+		t.Error("Should create an Alias A record")
+	}
+
 }
 
 func TestGetAssignedTXTRecordObject(t *testing.T) {
@@ -51,7 +74,7 @@ func TestGetAssignedTXTRecordObject(t *testing.T) {
 		IP:       "10.202.10.123",
 		Hostname: "amazon.elb.com",
 	}
-	rsA := client.endpointToAlias(ep, &zoneID)
+	rsA := client.endpointToRecord(ep, &zoneID)
 	rsTXT := client.getAssignedTXTRecordObject(rsA)
 	if *rsTXT.Type != "TXT" ||
 		*rsTXT.Name != "example.com." ||
