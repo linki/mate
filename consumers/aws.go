@@ -283,7 +283,7 @@ func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[strin
 			}
 		}
 		if aws.StringValue(record.Type) != "TXT" {
-			infoMap[aws.StringValue(record.Name)].Target = pkg.SanitizeDNSName(a.getRecordTarget(record))
+			infoMap[aws.StringValue(record.Name)].Target = a.getRecordTarget(record) //sanitization not needed here, as per IP case
 		}
 	}
 

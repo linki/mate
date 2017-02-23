@@ -18,6 +18,24 @@ func GetOriginalState(groupID string) map[string][]*route53.ResourceRecordSet {
 		"foo.com.": []*route53.ResourceRecordSet{
 			&route53.ResourceRecordSet{
 				Type: aws.String("A"),
+				Name: aws.String("public-ip.foo.com."),
+				ResourceRecords: []*route53.ResourceRecord{
+					&route53.ResourceRecord{
+						Value: aws.String("127.0.0.1"),
+					},
+				},
+			},
+			&route53.ResourceRecordSet{
+				Type: aws.String("TXT"),
+				Name: aws.String("public-ip.foo.com."),
+				ResourceRecords: []*route53.ResourceRecord{
+					&route53.ResourceRecord{
+						Value: aws.String(groupID),
+					},
+				},
+			},
+			&route53.ResourceRecordSet{
+				Type: aws.String("A"),
 				Name: aws.String("test.foo.com."),
 				AliasTarget: &route53.AliasTarget{
 					DNSName:      aws.String("404.elb.com"),
@@ -43,6 +61,15 @@ func GetOriginalState(groupID string) map[string][]*route53.ResourceRecordSet {
 			},
 		},
 		"example.com.": []*route53.ResourceRecordSet{
+			&route53.ResourceRecordSet{
+				Type: aws.String("A"),
+				Name: aws.String("public-ip.example.com."),
+				ResourceRecords: []*route53.ResourceRecord{
+					&route53.ResourceRecord{
+						Value: aws.String("192.168.0.1"),
+					},
+				},
+			},
 			&route53.ResourceRecordSet{
 				Type: aws.String("A"),
 				Name: aws.String("test.example.com."),
