@@ -31,6 +31,7 @@ type awsConsumer struct {
 const (
 	evaluateTargetHealth = true
 	defaultTxtTTL        = int64(300)
+	defaultATTL          = int64(300)
 )
 
 // NewAWSRoute53Consumer reates a Consumer instance to sync and process DNS
@@ -50,7 +51,7 @@ func withClient(c AWSClient, groupID string) *awsConsumer {
 }
 
 func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
-	kubeRecords, err := a.endpointsToAlias(endpoints)
+	kubeRecords, err := a.endpointsToRecords(endpoints)
 	if err != nil {
 		return err
 	}
@@ -68,7 +69,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	for _, record := range kubeRecords {
 		zoneID := getZoneIDForEndpoint(hostedZonesMap, record) //this guarantees that the endpoint will not be created in multiple hosted zones
 		if zoneID == "" {
-			log.Warnf("Hosted zone for endpoint: %s is not found. Skipping record...", aws.StringValue(record.Name))
+			log.Warnf("Hosted zone for endpoint: %s was not found. Skipping record...", aws.StringValue(record.Name))
 			continue
 		}
 		inputByZoneID[zoneID] = append(inputByZoneID[zoneID], record)
@@ -103,11 +104,11 @@ func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet
 	upsertedMap := make(map[string]bool) // keep track of records to be upserted
 	targetMap := map[string][]*string{}  // map dnsname -> list of targets
 	for _, kr := range kubeRecords {
-		targetMap[aws.StringValue(kr.Name)] = append(targetMap[aws.StringValue(kr.Name)], kr.AliasTarget.DNSName)
+		targetMap[aws.StringValue(kr.Name)] = append(targetMap[aws.StringValue(kr.Name)], aws.String(a.getRecordTarget(kr)))
 	}
 	//find records to be upserted
 	for _, kubeRecord := range kubeRecords {
-		//make sure that another record with same DNS name is not already included into upsert slice
+		//make sure that another record with same DNS name was not already included into upsert slice
 		if _, upserted := upsertedMap[aws.StringValue(kubeRecord.Name)]; upserted {
 			continue
 		}
@@ -202,19 +203,19 @@ func (a *awsConsumer) Process(endpoint *pkg.Endpoint) error {
 		return err
 	}
 
-	aliasRecords, err := a.endpointsToAlias([]*pkg.Endpoint{endpoint})
+	ARecords, err := a.endpointsToRecords([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
 	}
-	if len(aliasRecords) != 1 {
-		return fmt.Errorf("Failed to process endpoint. Alias could not be constructed for: %s:%s.", endpoint.DNSName, endpoint.Hostname)
+	if len(ARecords) != 1 {
+		return fmt.Errorf("failed to process endpoint. A record could not be constructed for: %s:%s:%s", endpoint.DNSName, endpoint.Hostname, endpoint.IP)
 	}
 
-	create := []*route53.ResourceRecordSet{aliasRecords[0], a.getAssignedTXTRecordObject(aliasRecords[0])}
+	create := []*route53.ResourceRecordSet{ARecords[0], a.getAssignedTXTRecordObject(ARecords[0])}
 
-	zoneID := getZoneIDForEndpoint(hostedZonesMap, aliasRecords[0])
+	zoneID := getZoneIDForEndpoint(hostedZonesMap, ARecords[0])
 	if zoneID == "" {
-		log.Warnf("Hosted zone for endpoint: %s is not found. Skipping record...", endpoint.DNSName)
+		log.Warnf("Hosted zone for endpoint: %s was not found. Skipping record...", endpoint.DNSName)
 		return nil
 	}
 
@@ -282,7 +283,7 @@ func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[strin
 			}
 		}
 		if aws.StringValue(record.Type) != "TXT" {
-			infoMap[aws.StringValue(record.Name)].Target = pkg.SanitizeDNSName(a.getRecordTarget(record))
+			infoMap[aws.StringValue(record.Name)].Target = a.getRecordTarget(record) //sanitization not needed here, as per IP case
 		}
 	}
 
@@ -300,11 +301,13 @@ func (a *awsConsumer) getRecordTarget(r *route53.ResourceRecordSet) string {
 	return aws.StringValue(r.ResourceRecords[0].Value)
 }
 
-//endpointsToAlias converts pkg Endpoint to route53 Alias Records
-func (a *awsConsumer) endpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
-	lbDNS := make([]string, len(endpoints))
-	for i := range endpoints {
-		lbDNS[i] = endpoints[i].Hostname
+//endpointsToRecords converts pkg Endpoint to route53 A [Alias] Records depending whether IP/LB Hostname is used
+func (a *awsConsumer) endpointsToRecords(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
+	lbDNS := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		if endpoint.Hostname != "" {
+			lbDNS = append(lbDNS, endpoint.Hostname)
+		}
 	}
 	zoneIDs, err := a.client.GetCanonicalZoneIDs(lbDNS)
 	if err != nil {
@@ -314,24 +317,36 @@ func (a *awsConsumer) endpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.Re
 
 	for _, ep := range endpoints {
 		if loadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
-			rset = append(rset, a.endpointToAlias(ep, aws.String(loadBalancerZoneID)))
+			rset = append(rset, a.endpointToRecord(ep, aws.String(loadBalancerZoneID)))
+		} else if ep.IP != "" {
+			rset = append(rset, a.endpointToRecord(ep, aws.String("")))
 		} else {
-			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
+			log.Errorf("Canonical Zone ID for endpoint: %s was not found", ep.Hostname)
 		}
 	}
 	return rset, nil
 }
 
-//endpointToAlias convert endpoint to an AWS A Alias record
-func (a *awsConsumer) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
+//endpointToRecord convert endpoint to an AWS A [Alias] record depending whether IP of LB hostname is used
+//if both are specified hostname takes precedence and Alias record is to be created
+func (a *awsConsumer) endpointToRecord(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
-		AliasTarget: &route53.AliasTarget{
+	}
+	if ep.Hostname != "" {
+		rs.AliasTarget = &route53.AliasTarget{
 			DNSName:              aws.String(pkg.SanitizeDNSName(ep.Hostname)),
 			EvaluateTargetHealth: aws.Bool(evaluateTargetHealth),
 			HostedZoneId:         canonicalZoneID,
-		},
+		}
+	} else {
+		rs.TTL = aws.Int64(defaultATTL)
+		rs.ResourceRecords = []*route53.ResourceRecord{
+			&route53.ResourceRecord{
+				Value: aws.String(ep.IP),
+			},
+		}
 	}
 	return rs
 }

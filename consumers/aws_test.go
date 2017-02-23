@@ -21,22 +21,44 @@ type awsTestItem struct {
 	expectFail   bool
 }
 
-func TestEndpointToAlias(t *testing.T) {
+func TestEndpointToRecord(t *testing.T) {
 	groupID := "test"
 	zoneID := "test"
 	client := &awsConsumer{
 		groupID: groupID,
 	}
+	//both Hostname and IP specified -> Alias Record
 	ep := &pkg.Endpoint{
 		DNSName:  "example.com",
 		IP:       "10.202.10.123",
 		Hostname: "amazon.elb.com",
 	}
-	rsA := client.endpointToAlias(ep, &zoneID)
+	rsA := client.endpointToRecord(ep, &zoneID)
 	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
 		*rsA.AliasTarget.DNSName != pkg.SanitizeDNSName(ep.Hostname) ||
 		*rsA.AliasTarget.HostedZoneId != zoneID {
+		t.Error("Should create an Alias A record")
+	}
+	// only IP specified -> plain A Record
+	ep = &pkg.Endpoint{
+		DNSName: "example.com",
+		IP:      "10.202.10.123",
+	}
+	rsA = client.endpointToRecord(ep, &zoneID)
+	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
+		len(rsA.ResourceRecords) != 1 || *rsA.ResourceRecords[0].Value != ep.IP {
 		t.Error("Should create an A record")
+	}
+	//only Hostname specified -> Alias Record
+	ep = &pkg.Endpoint{
+		DNSName:  "example.com",
+		Hostname: "amazon.elb.com",
+	}
+	rsA = client.endpointToRecord(ep, &zoneID)
+	if *rsA.Type != "A" || *rsA.Name != pkg.SanitizeDNSName(ep.DNSName) ||
+		*rsA.AliasTarget.DNSName != pkg.SanitizeDNSName(ep.Hostname) ||
+		*rsA.AliasTarget.HostedZoneId != zoneID {
+		t.Error("Should create an Alias A record")
 	}
 }
 
@@ -51,7 +73,7 @@ func TestGetAssignedTXTRecordObject(t *testing.T) {
 		IP:       "10.202.10.123",
 		Hostname: "amazon.elb.com",
 	}
-	rsA := client.endpointToAlias(ep, &zoneID)
+	rsA := client.endpointToRecord(ep, &zoneID)
 	rsTXT := client.getAssignedTXTRecordObject(rsA)
 	if *rsTXT.Type != "TXT" ||
 		*rsTXT.Name != "example.com." ||
@@ -115,7 +137,7 @@ func TestRecordInfo(t *testing.T) {
 			Type: aws.String("A"),
 			Name: aws.String("test.example.com."),
 			AliasTarget: &route53.AliasTarget{
-				DNSName:      aws.String("abc.def.ghi"),
+				DNSName:      aws.String("abc.def.ghi."),
 				HostedZoneId: aws.String("123"),
 			},
 		},
@@ -141,6 +163,40 @@ func TestRecordInfo(t *testing.T) {
 		}
 		if !sameTargets("abc.def.ghi.", val.Target) {
 			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+	records = []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String("54.32.12.32"),
+				},
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+	}
+	recordInfoMap = client.recordInfo(records)
+	if len(recordInfoMap) != 1 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := recordInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val.GroupID != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+		if !sameTargets("54.32.12.32", val.Target) {
+			t.Errorf("Incorrect record target for %v", records)
 		}
 	}
 	records = []*route53.ResourceRecordSet{
@@ -174,7 +230,7 @@ func TestRecordInfo(t *testing.T) {
 			Type: aws.String("A"),
 			Name: aws.String("new.example.com."),
 			AliasTarget: &route53.AliasTarget{
-				DNSName:      aws.String("elb.com"),
+				DNSName:      aws.String("elb.com."),
 				HostedZoneId: aws.String("123"),
 			},
 		},
@@ -191,7 +247,7 @@ func TestRecordInfo(t *testing.T) {
 			Type: aws.String("A"),
 			Name: aws.String("test.example.com."),
 			AliasTarget: &route53.AliasTarget{
-				DNSName:      aws.String("abc.def.ghi"),
+				DNSName:      aws.String("abc.def.ghi."),
 				HostedZoneId: aws.String("123"),
 			},
 		},
@@ -294,20 +350,17 @@ func checkEndpointSlices(got []*route53.ResourceRecordSet, expect []*route53.Res
 		}
 		var found bool
 		for _, eep := range expect {
-			if *ep.Type == "A" {
+			if eep.AliasTarget != nil && ep.AliasTarget != nil {
 				if *eep.Type == "A" && pkg.SanitizeDNSName(*eep.AliasTarget.DNSName) == pkg.SanitizeDNSName(*ep.AliasTarget.DNSName) &&
 					*ep.Name == *eep.Name {
 					found = true
 				}
-				continue
-			}
-			if *ep.Type == "TXT" {
-				if *eep.Type == "TXT" && *ep.Name == *eep.Name {
+			} else if ep.ResourceRecords != nil && len(ep.ResourceRecords) > 0 && eep.ResourceRecords != nil && len(eep.ResourceRecords) > 0 {
+				if *eep.Type == "A" && *eep.ResourceRecords[0].Value == *ep.ResourceRecords[0].Value &&
+					*ep.Name == *eep.Name {
 					found = true
 				}
-				continue
 			}
-			return false
 		}
 		if !found {
 			return false
@@ -383,6 +436,9 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 				{
 					"nest.sub.example.com", "", "nested.elb",
 				},
+				{
+					"ip.sub.example.com", "192.168.0.1", "",
+				},
 			},
 			expectUpsert: map[string][]*route53.ResourceRecordSet{
 				"sub.example.com.": []*route53.ResourceRecordSet{
@@ -397,6 +453,19 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 					&route53.ResourceRecordSet{
 						Type: aws.String("TXT"),
 						Name: aws.String("nest.sub.example.com."),
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("ip.sub.example.com."),
+						ResourceRecords: []*route53.ResourceRecord{
+							&route53.ResourceRecord{
+								Value: aws.String("192.168.0.1"),
+							},
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("ip.sub.example.com."),
 					},
 				},
 				"example.com.": []*route53.ResourceRecordSet{
@@ -428,6 +497,19 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 			},
 			expectDelete: map[string][]*route53.ResourceRecordSet{
 				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("public-ip.foo.com."),
+						ResourceRecords: []*route53.ResourceRecord{
+							&route53.ResourceRecord{
+								Value: aws.String("127.0.0.1"),
+							},
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("public-ip.foo.com."),
+					},
 					&route53.ResourceRecordSet{
 						Type: aws.String("A"),
 						Name: aws.String("update.foo.com."),
@@ -496,6 +578,19 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 				"foo.com.": []*route53.ResourceRecordSet{
 					&route53.ResourceRecordSet{
 						Type: aws.String("A"),
+						Name: aws.String("public-ip.foo.com."),
+						ResourceRecords: []*route53.ResourceRecord{
+							&route53.ResourceRecord{
+								Value: aws.String("127.0.0.1"),
+							},
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("public-ip.foo.com."),
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
 						Name: aws.String("update.foo.com."),
 						AliasTarget: &route53.AliasTarget{
 							DNSName:      aws.String("404.elb.com"),
@@ -559,6 +654,19 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 				"foo.com.": []*route53.ResourceRecordSet{
 					&route53.ResourceRecordSet{
 						Type: aws.String("A"),
+						Name: aws.String("public-ip.foo.com."),
+						ResourceRecords: []*route53.ResourceRecord{
+							&route53.ResourceRecord{
+								Value: aws.String("127.0.0.1"),
+							},
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("public-ip.foo.com."),
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
 						Name: aws.String("update.foo.com."),
 						AliasTarget: &route53.AliasTarget{
 							DNSName:      aws.String("404.elb.com"),
@@ -613,6 +721,19 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 				"foo.com.": []*route53.ResourceRecordSet{
 					&route53.ResourceRecordSet{
 						Type: aws.String("A"),
+						Name: aws.String("public-ip.foo.com."),
+						ResourceRecords: []*route53.ResourceRecord{
+							&route53.ResourceRecord{
+								Value: aws.String("127.0.0.1"),
+							},
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("public-ip.foo.com."),
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
 						Name: aws.String("update.foo.com."),
 						AliasTarget: &route53.AliasTarget{
 							DNSName:      aws.String("404.elb.com"),
@@ -661,6 +782,19 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 					},
 				},
 				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("public-ip.foo.com."),
+						ResourceRecords: []*route53.ResourceRecord{
+							&route53.ResourceRecord{
+								Value: aws.String("127.0.0.1"),
+							},
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("public-ip.foo.com."),
+					},
 					&route53.ResourceRecordSet{
 						Type: aws.String("A"),
 						Name: aws.String("update.foo.com."),
@@ -743,6 +877,21 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 						Name: aws.String("update.example.com."),
 					},
 				},
+				"foo.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("public-ip.foo.com."),
+						ResourceRecords: []*route53.ResourceRecord{
+							&route53.ResourceRecord{
+								Value: aws.String("127.0.0.1"),
+							},
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("public-ip.foo.com."),
+					},
+				},
 			},
 		}, {
 			msg:     "process new",
@@ -759,7 +908,27 @@ func TestAWSConsumer(t *testing.T) { //exclude IP endpoints for now only Alias w
 					},
 					&route53.ResourceRecordSet{
 						Type: aws.String("TXT"),
-						Name: aws.String("baz.org."),
+						Name: aws.String("process.example.com."),
+					},
+				},
+			},
+		}, {
+			msg:     "process new ip",
+			process: &pkg.Endpoint{DNSName: "process.example.com.", IP: "127.0.0.2"},
+			expectCreate: map[string][]*route53.ResourceRecordSet{
+				"example.com.": []*route53.ResourceRecordSet{
+					&route53.ResourceRecordSet{
+						Type: aws.String("A"),
+						Name: aws.String("process.example.com."),
+						ResourceRecords: []*route53.ResourceRecord{
+							&route53.ResourceRecord{
+								Value: aws.String("127.0.0.2"),
+							},
+						},
+					},
+					&route53.ResourceRecordSet{
+						Type: aws.String("TXT"),
+						Name: aws.String("process.example.com."),
 					},
 				},
 			},
