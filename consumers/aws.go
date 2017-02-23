@@ -50,7 +50,7 @@ func withClient(c AWSClient, groupID string) *awsConsumer {
 }
 
 func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
-	kubeRecords, err := a.endpointsToAlias(endpoints)
+	kubeRecords, err := a.endpointsToRecords(endpoints)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func (a *awsConsumer) Process(endpoint *pkg.Endpoint) error {
 		return err
 	}
 
-	aliasRecords, err := a.endpointsToAlias([]*pkg.Endpoint{endpoint})
+	aliasRecords, err := a.endpointsToRecords([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
 	}
@@ -300,11 +300,11 @@ func (a *awsConsumer) getRecordTarget(r *route53.ResourceRecordSet) string {
 	return aws.StringValue(r.ResourceRecords[0].Value)
 }
 
-//endpointsToAlias converts pkg Endpoint to route53 Alias Records
-func (a *awsConsumer) endpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
-	lbDNS := make([]string, len(endpoints))
+//endpointsToRecords converts pkg Endpoint to route53 Alias Records
+func (a *awsConsumer) endpointsToRecords(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
+	lbDNS := make([]string, 0)
 	for i := range endpoints {
-		lbDNS[i] = endpoints[i].Hostname
+		lbDNS = append(lbDNS, endpoints[i].Hostname)
 	}
 	zoneIDs, err := a.client.GetCanonicalZoneIDs(lbDNS)
 	if err != nil {
@@ -314,7 +314,9 @@ func (a *awsConsumer) endpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.Re
 
 	for _, ep := range endpoints {
 		if loadBalancerZoneID, exist := zoneIDs[ep.Hostname]; exist {
-			rset = append(rset, a.endpointToAlias(ep, aws.String(loadBalancerZoneID)))
+			rset = append(rset, a.endpointToRecord(ep, aws.String(loadBalancerZoneID)))
+		} else if ep.IP != "" {
+			rset = append(rset, a.endpointToRecord(ep, aws.String("")))
 		} else {
 			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
 		}
@@ -322,16 +324,24 @@ func (a *awsConsumer) endpointsToAlias(endpoints []*pkg.Endpoint) ([]*route53.Re
 	return rset, nil
 }
 
-//endpointToAlias convert endpoint to an AWS A Alias record
-func (a *awsConsumer) endpointToAlias(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
+//endpointToRecord convert endpoint to an AWS A [Alias] record depending whether IP of ELB hostname is used
+func (a *awsConsumer) endpointToRecord(ep *pkg.Endpoint, canonicalZoneID *string) *route53.ResourceRecordSet {
 	rs := &route53.ResourceRecordSet{
 		Type: aws.String("A"),
 		Name: aws.String(pkg.SanitizeDNSName(ep.DNSName)),
-		AliasTarget: &route53.AliasTarget{
+	}
+	if ep.Hostname != "" {
+		rs.AliasTarget = &route53.AliasTarget{
 			DNSName:              aws.String(pkg.SanitizeDNSName(ep.Hostname)),
 			EvaluateTargetHealth: aws.Bool(evaluateTargetHealth),
 			HostedZoneId:         canonicalZoneID,
-		},
+		}
+	} else {
+		rs.ResourceRecords = []*route53.ResourceRecord{
+			&route53.ResourceRecord{
+				Value: aws.String(ep.IP),
+			},
+		}
 	}
 	return rs
 }
