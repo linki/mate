@@ -31,6 +31,7 @@ type awsConsumer struct {
 const (
 	evaluateTargetHealth = true
 	defaultTxtTTL        = int64(300)
+	defaultATTL          = int64(300)
 )
 
 // NewAWSRoute53Consumer reates a Consumer instance to sync and process DNS
@@ -68,7 +69,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	for _, record := range kubeRecords {
 		zoneID := getZoneIDForEndpoint(hostedZonesMap, record) //this guarantees that the endpoint will not be created in multiple hosted zones
 		if zoneID == "" {
-			log.Warnf("Hosted zone for endpoint: %s is not found. Skipping record...", aws.StringValue(record.Name))
+			log.Warnf("Hosted zone for endpoint: %s was not found. Skipping record...", aws.StringValue(record.Name))
 			continue
 		}
 		inputByZoneID[zoneID] = append(inputByZoneID[zoneID], record)
@@ -103,11 +104,11 @@ func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet
 	upsertedMap := make(map[string]bool) // keep track of records to be upserted
 	targetMap := map[string][]*string{}  // map dnsname -> list of targets
 	for _, kr := range kubeRecords {
-		targetMap[aws.StringValue(kr.Name)] = append(targetMap[aws.StringValue(kr.Name)], kr.AliasTarget.DNSName)
+		targetMap[aws.StringValue(kr.Name)] = append(targetMap[aws.StringValue(kr.Name)], aws.String(a.getRecordTarget(kr)))
 	}
 	//find records to be upserted
 	for _, kubeRecord := range kubeRecords {
-		//make sure that another record with same DNS name is not already included into upsert slice
+		//make sure that another record with same DNS name was not already included into upsert slice
 		if _, upserted := upsertedMap[aws.StringValue(kubeRecord.Name)]; upserted {
 			continue
 		}
@@ -202,19 +203,19 @@ func (a *awsConsumer) Process(endpoint *pkg.Endpoint) error {
 		return err
 	}
 
-	aliasRecords, err := a.endpointsToRecords([]*pkg.Endpoint{endpoint})
+	ARecords, err := a.endpointsToRecords([]*pkg.Endpoint{endpoint})
 	if err != nil {
 		return err
 	}
-	if len(aliasRecords) != 1 {
-		return fmt.Errorf("Failed to process endpoint. Alias could not be constructed for: %s:%s.", endpoint.DNSName, endpoint.Hostname)
+	if len(ARecords) != 1 {
+		return fmt.Errorf("failed to process endpoint. A record could not be constructed for: %s:%s:%s", endpoint.DNSName, endpoint.Hostname, endpoint.IP)
 	}
 
-	create := []*route53.ResourceRecordSet{aliasRecords[0], a.getAssignedTXTRecordObject(aliasRecords[0])}
+	create := []*route53.ResourceRecordSet{ARecords[0], a.getAssignedTXTRecordObject(ARecords[0])}
 
-	zoneID := getZoneIDForEndpoint(hostedZonesMap, aliasRecords[0])
+	zoneID := getZoneIDForEndpoint(hostedZonesMap, ARecords[0])
 	if zoneID == "" {
-		log.Warnf("Hosted zone for endpoint: %s is not found. Skipping record...", endpoint.DNSName)
+		log.Warnf("Hosted zone for endpoint: %s was not found. Skipping record...", endpoint.DNSName)
 		return nil
 	}
 
@@ -318,7 +319,7 @@ func (a *awsConsumer) endpointsToRecords(endpoints []*pkg.Endpoint) ([]*route53.
 		} else if ep.IP != "" {
 			rset = append(rset, a.endpointToRecord(ep, aws.String("")))
 		} else {
-			log.Errorf("Canonical Zone ID for endpoint: %s is not found", ep.Hostname)
+			log.Errorf("Canonical Zone ID for endpoint: %s was not found", ep.Hostname)
 		}
 	}
 	return rset, nil
@@ -338,6 +339,7 @@ func (a *awsConsumer) endpointToRecord(ep *pkg.Endpoint, canonicalZoneID *string
 			HostedZoneId:         canonicalZoneID,
 		}
 	} else {
+		rs.TTL = aws.Int64(defaultATTL)
 		rs.ResourceRecords = []*route53.ResourceRecord{
 			&route53.ResourceRecord{
 				Value: aws.String(ep.IP),
