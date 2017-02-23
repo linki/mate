@@ -303,9 +303,11 @@ func (a *awsConsumer) getRecordTarget(r *route53.ResourceRecordSet) string {
 
 //endpointsToRecords converts pkg Endpoint to route53 A [Alias] Records depending whether IP/LB Hostname is used
 func (a *awsConsumer) endpointsToRecords(endpoints []*pkg.Endpoint) ([]*route53.ResourceRecordSet, error) {
-	lbDNS := make([]string, 0)
-	for i := range endpoints {
-		lbDNS = append(lbDNS, endpoints[i].Hostname)
+	lbDNS := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		if endpoint.Hostname != "" {
+			lbDNS = append(lbDNS, endpoint.Hostname)
+		}
 	}
 	zoneIDs, err := a.client.GetCanonicalZoneIDs(lbDNS)
 	if err != nil {
