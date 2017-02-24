@@ -150,6 +150,11 @@ func TestRecordInfo(t *testing.T) {
 				},
 			},
 		},
+		&route53.ResourceRecordSet{
+			Type:            aws.String("TXT"),
+			Name:            aws.String("test.example.com."),
+			ResourceRecords: nil,
+		},
 	}
 	recordInfoMap := client.recordInfo(records)
 	if len(recordInfoMap) != 1 {

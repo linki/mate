@@ -265,7 +265,7 @@ func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[strin
 	groupIDMap := map[string]string{} //maps dns to group ID
 
 	for _, record := range records {
-		if (aws.StringValue(record.Type)) == "TXT" {
+		if aws.StringValue(record.Type) == "TXT" && len(record.ResourceRecords) > 0 {
 			groupIDMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
 		} else {
 			if _, exist := groupIDMap[aws.StringValue(record.Name)]; !exist {
