@@ -265,8 +265,13 @@ func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[strin
 	groupIDMap := map[string]string{} //maps dns to group ID
 
 	for _, record := range records {
-		if aws.StringValue(record.Type) == "TXT" && len(record.ResourceRecords) > 0 {
-			groupIDMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
+		if aws.StringValue(record.Type) == "TXT" {
+			if len(record.ResourceRecords) > 0 {
+				groupIDMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
+			} else {
+				log.Errorf("Unexpected response from AWS API, got TXT record with empty resources: %s. Record is excluded from syncing", aws.StringValue(record.Name))
+				groupIDMap[aws.StringValue(record.Name)] = ""
+			}
 		} else {
 			if _, exist := groupIDMap[aws.StringValue(record.Name)]; !exist {
 				groupIDMap[aws.StringValue(record.Name)] = ""
