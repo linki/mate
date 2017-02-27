@@ -127,6 +127,84 @@ func sameTargets(lb1, lb2 string) bool {
 	return lb1 == lb2
 }
 
+func TestGroupIDInfo(t *testing.T) {
+	groupID := "test"
+	client := &awsConsumer{
+		groupID: groupID,
+	}
+	records := []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("test.example.com."),
+			AliasTarget: &route53.AliasTarget{
+				DNSName:      aws.String("abc.def.ghi."),
+				HostedZoneId: aws.String("123"),
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type:            aws.String("TXT"),
+			Name:            aws.String("unusual-1.example.com."),
+			ResourceRecords: nil,
+		},
+		&route53.ResourceRecordSet{
+			Type:            aws.String("TXT"),
+			Name:            aws.String("unusual-2.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{},
+		},
+	}
+	groupIDInfoMap := client.groupIDInfo(records)
+	if len(groupIDInfoMap) != 3 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := groupIDInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+	records = []*route53.ResourceRecordSet{
+		&route53.ResourceRecordSet{
+			Type: aws.String("A"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String("54.32.12.32"),
+				},
+			},
+		},
+		&route53.ResourceRecordSet{
+			Type: aws.String("TXT"),
+			Name: aws.String("test.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{
+				&route53.ResourceRecord{
+					Value: aws.String(client.getGroupID()),
+				},
+			},
+		},
+	}
+	groupIDInfoMap = client.groupIDInfo(records)
+	if len(groupIDInfoMap) != 1 {
+		t.Errorf("Incorrect record info for %v", records)
+	}
+	if val, exist := groupIDInfoMap["test.example.com."]; !exist {
+		t.Errorf("Incorrect record info for %v", records)
+	} else {
+		if val != client.getGroupID() {
+			t.Errorf("Incorrect record info for %v", records)
+		}
+	}
+}
+
 func TestRecordInfo(t *testing.T) {
 	groupID := "test"
 	client := &awsConsumer{

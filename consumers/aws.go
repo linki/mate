@@ -260,8 +260,8 @@ func (a *awsConsumer) getAssignedTXTRecordObject(aliasRecord *route53.ResourceRe
 	}
 }
 
-//recordInfo returns the map of record assigned dns to its target and groupID (can be empty)
-func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo {
+//groupIDInfo builds a map from dns name to its group ID
+func (a *awsConsumer) groupIDInfo(records []*route53.ResourceRecordSet) map[string]string {
 	groupIDMap := map[string]string{} //maps dns to group ID
 
 	for _, record := range records {
@@ -269,7 +269,7 @@ func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[strin
 			if len(record.ResourceRecords) > 0 {
 				groupIDMap[aws.StringValue(record.Name)] = aws.StringValue(record.ResourceRecords[0].Value)
 			} else {
-				log.Errorf("Unexpected response from AWS API, got TXT record with empty resources: %s. Record is excluded from syncing", aws.StringValue(record.Name))
+				log.Errorf("Unexpected response from AWS API, got TXT record with empty resources: %s . Record is excluded from syncing", aws.StringValue(record.Name))
 				groupIDMap[aws.StringValue(record.Name)] = ""
 			}
 		} else {
@@ -278,7 +278,12 @@ func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[strin
 			}
 		}
 	}
+	return groupIDMap
+}
 
+//recordInfo returns the map of record assigned dns to its target and groupID (can be empty string)
+func (a *awsConsumer) recordInfo(records []*route53.ResourceRecordSet) map[string]*pkg.RecordInfo {
+	groupIDMap := a.groupIDInfo(records)
 	infoMap := map[string]*pkg.RecordInfo{} //maps record DNS to its GroupID (if exists) and Target (LB)
 	for _, record := range records {
 		groupID := groupIDMap[aws.StringValue(record.Name)]
