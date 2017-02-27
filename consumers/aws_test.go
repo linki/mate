@@ -152,12 +152,17 @@ func TestRecordInfo(t *testing.T) {
 		},
 		&route53.ResourceRecordSet{
 			Type:            aws.String("TXT"),
-			Name:            aws.String("test.example.com."),
+			Name:            aws.String("unusual-1.example.com."),
 			ResourceRecords: nil,
+		},
+		&route53.ResourceRecordSet{
+			Type:            aws.String("TXT"),
+			Name:            aws.String("unusual-2.example.com."),
+			ResourceRecords: []*route53.ResourceRecord{},
 		},
 	}
 	recordInfoMap := client.recordInfo(records)
-	if len(recordInfoMap) != 1 {
+	if len(recordInfoMap) != 3 {
 		t.Errorf("Incorrect record info for %v", records)
 	}
 	if val, exist := recordInfoMap["test.example.com."]; !exist {
