@@ -89,6 +89,64 @@ spec:
 
 *Note*: To use kubernetes ingress on AWS you need to run an Ingress controller in your cluster. Possible implementation details can be found here:
 https://github.com/kubernetes/contrib/tree/master/ingress/controllers
+### Ingress Controller (nginx)
+The nginx based ingress controller is a constantly changing entity. Therefore please pay attention to the versions in the following example.  When running in AWS the nginx ingress controller allocates an elastic load blancer (ELB) to front the ingress controller.  All ingresses go through this interface.  Therefore the external ip address of any ingress through this controller will be the DNS alias of the ELB.  Normally the nginx controller does not return the ELB's ip address to the field that mate uses to obtain the ipaddress of the ingress.  Meaning that when mate publishes the route53 DNS record it will not populate the field with the correct value.  However all is NOT lost!
+
+You can add an arguement to the nginx ingress controller binary to publish the correct value.  Below you can find a full Deployment of a nginx ingress controoller that has enabled the `publish-service` option. This option was added to the nginx controller in 0.9-beta.1  Specifically this option :`the ingress status will be updated with the load balancer configuration of the service, rather than the IP/s of the node/s.`
+
+[Nginx ingress controller Change log](https://github.com/kubernetes/ingress/blob/master/controllers/nginx/Changelog.md#09-beta1)
+
+```
+
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  name: ingress-nginx
+  namespace: default
+  labels:
+    k8s-addon: ingress-nginx.addons.k8s.io
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ingress-nginx
+        k8s-addon: ingress-nginx.addons.k8s.io
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - image: gcr.io/google_containers/nginx-ingress-controller:0.9.0-beta.2
+        name: ingress-nginx
+        imagePullPolicy: Always
+        ports:
+          - name: http
+            containerPort: 80
+            protocol: TCP
+          - name: https
+            containerPort: 443
+            protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 10254
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        args:
+        - /nginx-ingress-controller
+        - --default-backend-service=$(POD_NAMESPACE)/nginx-default-backend
+        - --configmap=$(POD_NAMESPACE)/ingress-nginx
+        - --publish-service=$(POD_NAMESPACE)/ingress-nginx
+  ``
 
 
 Your Ingress controller should provision a Load Balancer (both ELB and ALB are supported by Mate) and update the ingress resource.
