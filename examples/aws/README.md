@@ -89,10 +89,11 @@ spec:
 
 *Note*: To use kubernetes ingress on AWS you need to run an Ingress controller in your cluster. Possible implementation details can be found here:
 https://github.com/kubernetes/contrib/tree/master/ingress/controllers
-### Ingress Controller (nginx)
+## Ingress Controller (nginx)
 The nginx based ingress controller is a constantly changing entity. Therefore please pay attention to the versions in the following example.  When running in AWS the nginx ingress controller allocates an elastic load blancer (ELB) to front the ingress controller.  All ingresses go through this interface.  Therefore the external ip address of any ingress through this controller will be the DNS alias of the ELB.  Normally the nginx controller does not return the ELB's ip address to the field that mate uses to obtain the ipaddress of the ingress.  Meaning that when mate publishes the route53 DNS record it will not populate the field with the correct value.  However all is NOT lost!
 
-You can add an arguement to the nginx ingress controller binary to publish the correct value.  Below you can find a full Deployment of a nginx ingress controoller that has enabled the `publish-service` option. This option was added to the nginx controller in 0.9-beta.1  Specifically this option :`the ingress status will be updated with the load balancer configuration of the service, rather than the IP/s of the node/s.`
+You can add an arguement to the nginx ingress controller binary to publish the correct value.  Below you can find a full Deployment of a nginx ingress controoller that has enabled the `publish-service` option. This option was added to the nginx controller in 0.9-beta.1 to create the following behavior :
+`the ingress status will be updated with the load balancer configuration of the service, rather than the IP/s of the node/s.`
 
 [Nginx ingress controller Change log](https://github.com/kubernetes/ingress/blob/master/controllers/nginx/Changelog.md#09-beta1)
 
