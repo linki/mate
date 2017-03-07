@@ -116,6 +116,19 @@ You can choose any combination. `Kubernetes` + `Stdout` is useful for testing yo
 * Although the modular design allows to specify it, you currently cannot create DNS records on Google CloudDNS for a cluster running on AWS because AWS ELBs will send ELB endpoints in the form of DNS names whereas the Google consumer expects them to be IPs and vice versa.
 * Creating DNS entries for NodePort services doesn't currently work in combination with the AWS consumer.
 
+# Compatibility with other controllers
+
+By default `mate` will process all Services and Ingresses in all namespaces. This can lead to conflicts with other controllers such as [kops' dns-controller](https://github.com/kubernetes/kops/tree/master/dns-controller) or [wearemolecule's route53-kubernetes](wearemolecule/route53-kubernetes). In order to avoid conflicts with other implementations or for when you want opt-in behaviour you can start `mate` with the `--kubernetes-filter` flag passing it an annotation selector to filter Services and Ingresses for. For example,
+
+```console
+$ ./mate \
+    --producer kubernetes \
+    --kubernetes-filter external-dns.alpha.kubernetes.io/controller=mate \
+    [...]
+```
+
+will only consider Services and Ingresses annotated with `external-dns.alpha.kubernetes.io/controller=mate`.
+
 # License
 
 The MIT License (MIT)
