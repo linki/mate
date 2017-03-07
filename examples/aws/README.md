@@ -147,7 +147,7 @@ spec:
         - --default-backend-service=$(POD_NAMESPACE)/nginx-default-backend
         - --configmap=$(POD_NAMESPACE)/ingress-nginx
         - --publish-service=$(POD_NAMESPACE)/ingress-nginx
-  ``
+  ```
 
 
 Your Ingress controller should provision a Load Balancer (both ELB and ALB are supported by Mate) and update the ingress resource.
