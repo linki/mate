@@ -89,6 +89,10 @@ spec:
 
 *Note*: To use kubernetes ingress on AWS you need to run an Ingress controller in your cluster. Possible implementation details can be found here:
 https://github.com/kubernetes/contrib/tree/master/ingress/controllers
+Your Ingress controller should provision a Load Balancer (both ELB and ALB are supported by Mate) and update the ingress resource.
+Once LB is created Mate will create a DNS records, as specified in `rules.Host` field of created ingress resource, e.g. in the specified example it will create
+two records in two separate hosted zones `bar-app.example.com` and `foo-app.foo.com` (assuming both exist in your AWS account).
+
 ## Ingress Controller (nginx)
 The nginx based ingress controller is a constantly changing entity. Therefore please pay attention to the versions in the following example.  When running in AWS the nginx ingress controller allocates an elastic load blancer (ELB) to front the ingress controller.  All ingresses go through this interface.  Therefore the external ip address of any ingress through this controller will be the DNS alias of the ELB.  Normally the nginx controller does not return the ELB's ip address to the field that mate uses to obtain the ipaddress of the ingress.  Meaning that when mate publishes the route53 DNS record it will not populate the field with the correct value.  However all is NOT lost!
 
@@ -150,9 +154,6 @@ spec:
   ```
 
 
-Your Ingress controller should provision a Load Balancer (both ELB and ALB are supported by Mate) and update the ingress resource.
-Once LB is created Mate will create a DNS records, as specified in `rules.Host` field of created ingress resource, e.g. in the specified example it will create
-two records in two separate hosted zones `bar-app.example.com` and `foo-app.foo.com` (assuming both exist in your AWS account).
 
 ### Permissions
 
