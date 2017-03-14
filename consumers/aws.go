@@ -95,6 +95,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet, zoneID string) error {
 	existingRecords, err := a.client.ListRecordSets(zoneID)
 	if err != nil {
+		log.Debugf("aborting sync per hosted zone. Cannot convert endpoints to rrs: %v", err)
 		return err
 	}
 
@@ -331,7 +332,7 @@ func (a *awsConsumer) endpointsToRecords(endpoints []*pkg.Endpoint) ([]*route53.
 		} else if ep.IP != "" {
 			rset = append(rset, a.endpointToRecord(ep, aws.String("")))
 		} else {
-			log.Errorf("Canonical Zone ID for endpoint: %s was not found", ep.Hostname)
+			return nil, fmt.Errorf("Canonical Zone ID for load balancer: %s was not found", ep.Hostname)
 		}
 	}
 	return rset, nil
