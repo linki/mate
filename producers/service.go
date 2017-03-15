@@ -147,7 +147,7 @@ func validateService(svc api.Service, filter map[string]string) error {
 	switch {
 	case len(svc.Status.LoadBalancer.Ingress) == 0:
 		return fmt.Errorf(
-			"[Service] The load balancer of service '%s/%s' does not have any ingress.",
+			"[Service] The load balancer field of service '%s/%s' is empty",
 			svc.Namespace, svc.Name,
 		)
 	case len(svc.Status.LoadBalancer.Ingress) > 1:

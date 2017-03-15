@@ -140,7 +140,7 @@ func validateIngress(ing extensions.Ingress, filter map[string]string) error {
 	switch {
 	case len(ing.Status.LoadBalancer.Ingress) == 0:
 		return fmt.Errorf(
-			"[Ingress] The load balancer of ingress '%s/%s' does not have any ingress.",
+			"[Ingress] The load balancer field of ingress '%s/%s' is empty",
 			ing.Namespace, ing.Name,
 		)
 	case len(ing.Status.LoadBalancer.Ingress) > 1:

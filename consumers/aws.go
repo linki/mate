@@ -53,6 +53,7 @@ func withClient(c AWSClient, groupID string) *awsConsumer {
 func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	kubeRecords, err := a.endpointsToRecords(endpoints)
 	if err != nil {
+		log.Errorf("failed to convert endpoints to RRS: %v. Aborting sync...", err)
 		return err
 	}
 
@@ -84,7 +85,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 			if err != nil {
 				//should pass the err down the error channel
 				//for now just log
-				log.Errorf("Error changing records per zone: %s", zoneName)
+				log.Errorf("Error changing records per zone: %s. Error: %v", zoneName, err)
 			}
 		}(zoneName, zoneID)
 	}
@@ -95,6 +96,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet, zoneID string) error {
 	existingRecords, err := a.client.ListRecordSets(zoneID)
 	if err != nil {
+		log.Errorf("failed to list records in zoneID: %s. Error: %v", zoneID, err)
 		return err
 	}
 
@@ -205,6 +207,7 @@ func (a *awsConsumer) Process(endpoint *pkg.Endpoint) error {
 
 	ARecords, err := a.endpointsToRecords([]*pkg.Endpoint{endpoint})
 	if err != nil {
+		log.Errorf("failed to convert endpoint to RRS: %v. Aborting process...", err)
 		return err
 	}
 	if len(ARecords) != 1 {
@@ -331,7 +334,7 @@ func (a *awsConsumer) endpointsToRecords(endpoints []*pkg.Endpoint) ([]*route53.
 		} else if ep.IP != "" {
 			rset = append(rset, a.endpointToRecord(ep, aws.String("")))
 		} else {
-			log.Errorf("Canonical Zone ID for endpoint: %s was not found", ep.Hostname)
+			return nil, fmt.Errorf("Canonical Zone ID for load balancer: %s was not found", ep.Hostname)
 		}
 	}
 	return rset, nil
