@@ -84,7 +84,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 			if err != nil {
 				//should pass the err down the error channel
 				//for now just log
-				log.Errorf("Error changing records per zone: %s", zoneName)
+				log.Errorf("Error changing records per zone: %s. Error: %v", zoneName, err)
 			}
 		}(zoneName, zoneID)
 	}
