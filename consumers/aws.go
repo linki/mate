@@ -53,6 +53,7 @@ func withClient(c AWSClient, groupID string) *awsConsumer {
 func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 	kubeRecords, err := a.endpointsToRecords(endpoints)
 	if err != nil {
+		log.Errorf("failed to convert endpoints to RRS: %v. Aborting sync...", err)
 		return err
 	}
 
@@ -95,7 +96,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet, zoneID string) error {
 	existingRecords, err := a.client.ListRecordSets(zoneID)
 	if err != nil {
-		log.Debugf("aborting sync per hosted zone. Cannot convert endpoints to rrs: %v", err)
+		log.Debugf("failed to list records in zoneID:%s. Error: %v", err)
 		return err
 	}
 
@@ -206,6 +207,7 @@ func (a *awsConsumer) Process(endpoint *pkg.Endpoint) error {
 
 	ARecords, err := a.endpointsToRecords([]*pkg.Endpoint{endpoint})
 	if err != nil {
+		log.Errorf("failed to convert endpoint to RRS: %v. Aborting process...", err)
 		return err
 	}
 	if len(ARecords) != 1 {
