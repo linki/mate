@@ -96,7 +96,7 @@ func (a *awsConsumer) Sync(endpoints []*pkg.Endpoint) error {
 func (a *awsConsumer) syncPerHostedZone(kubeRecords []*route53.ResourceRecordSet, zoneID string) error {
 	existingRecords, err := a.client.ListRecordSets(zoneID)
 	if err != nil {
-		log.Debugf("failed to list records in zoneID:%s. Error: %v", err)
+		log.Errorf("failed to list records in zoneID:%s. Error: %v", zoneID, err)
 		return err
 	}
 
