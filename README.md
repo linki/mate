@@ -94,6 +94,10 @@ API server url using the flag `kubernetes-server`. For instance you can run
 Mate locally with the server URL set to `http://127.0.0.1:8001` and use
 `kubectl proxy` to forward requests to a cluster.
 
+# Ingress
+
+In Zalando we use our in-house built ingress controller on AWS - [kube-ingress-aws-controller](https://github.com/zalando-incubator/kube-ingress-aws-controller) which makes the whole setup super simple and it is production tested. Please refer to the [ingress section](https://kubernetes-on-aws.readthedocs.io/en/latest/user-guide/ingress.html) for usage manual.
+
 # Producers and Consumers
 
 Mate supports swapping out Endpoint producers (e.g. a service list from Kubernetes) and endpoint consumers (e.g. making API calls to Google to create DNS records) and both sides are pluggable. There currently exist two producer and three consumer implementations.
