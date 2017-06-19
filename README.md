@@ -1,13 +1,11 @@
+# Deprecated
+
+This repo has been officially deprecated in favor of the https://github.com/kubernetes-incubator/external-dns addon. That addon offers a lot more features, better performance, and a compatibility mode for current users of `Mate`. See compatibility mode docs [here](https://github.com/kubernetes-incubator/external-dns/blob/v0.4.0-alpha.1/docs/faq.md#how-do-i-specify-dns-name-for-my-kubernetes-objects).
+
 # Mate
 [![Build Status](https://travis-ci.org/zalando-incubator/mate.svg?branch=master)](https://travis-ci.org/zalando-incubator/mate)
 [![Coverage Status](https://coveralls.io/repos/github/zalando-incubator/mate/badge.svg?branch=master)](https://coveralls.io/github/zalando-incubator/mate?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/zalando-incubator/mate)](https://goreportcard.com/report/github.com/zalando-incubator/mate)
-
-# Status
-
-Mate will be merged into new External DNS project - https://github.com/kubernetes-incubator/external-dns, which is meant to be compatible with Mate annotations and become a standard way of creating DNS records for Kubernetes. 
-
-This project is no longer actively developed in the view of External DNS and only minor bug fixes will be considered.  
 
 # Purpose
 
