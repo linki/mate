@@ -154,24 +154,26 @@ func (a *kubernetesNodePortsProducer) convertNodePortServiceToEndpoint(svc api.S
 				continue
 			}
 
-			ep := &pkg.Endpoint{
-				DNSName: svc.ObjectMeta.Annotations[annotationKey],
-			}
-
-			if ep.DNSName == "" {
-				var buf bytes.Buffer
-				if err := a.tmpl.Execute(&buf, svc); err != nil {
-					return nil, fmt.Errorf("Error applying template: %s", err)
+			for _, dnsname := range strings.Split(svc.ObjectMeta.Annotations[annotationKey], ",") {
+				ep := &pkg.Endpoint{
+					DNSName: dnsname,
 				}
 
-				ep.DNSName = pkg.SanitizeDNSName(buf.String())
+				if ep.DNSName == "" {
+					var buf bytes.Buffer
+					if err := a.tmpl.Execute(&buf, svc); err != nil {
+						return nil, fmt.Errorf("Error applying template: %s", err)
+					}
+
+					ep.DNSName = pkg.SanitizeDNSName(buf.String())
+				}
+
+				log.Debugf("%s address: %s (%s)", node.Name, address.Address, address.Type)
+
+				ep.IP = address.Address
+
+				endpoints = append(endpoints, ep)
 			}
-
-			log.Debugf("%s address: %s (%s)", node.Name, address.Address, address.Type)
-
-			ep.IP = address.Address
-
-			endpoints = append(endpoints, ep)
 		}
 	}
 
